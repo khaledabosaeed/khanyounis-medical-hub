@@ -42,7 +42,12 @@ app.use((error, req, res, _next) => {
   const status = Number(error?.status) || 500;
   const safeStatus = status >= 400 && status < 500 ? status : 500;
   if (safeStatus >= 500) {
-    console.error('Request failed:', { path: req.path, name: error?.name || 'Error', code: error?.code || 'INTERNAL' });
+    console.error('Request failed:', {
+      path: req.path,
+      name: error?.name || 'Error',
+      code: error?.code || 'INTERNAL',
+      message: error?.message || 'Unknown request error',
+    });
   }
   const message = safeStatus === 500 ? 'Something went wrong. Please try again.' : String(error.message || 'Request failed.');
   return res.status(safeStatus).json({ error: message, code: error.code || (safeStatus === 500 ? 'INTERNAL_ERROR' : 'REQUEST_ERROR') });
