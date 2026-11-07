@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#eef2f0" />
+    <meta name="description" content="Khanyonis Medical Hub — a calm student space for study, online exams, and weekly booking." />
+    <title>Hub Login - Medical Hub - Samir Foundation</title>
+    <link rel="preconnect" href="https://fonts.bunny.net" />
+    <link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700,800,900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/assets/khanyonis-login.css" />
+    <link rel="stylesheet" href="/hub-app.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body class="font-sans text-gray-900 antialiased">
+    <div class="min-h-screen bg-[#eef2f0] px-4 py-8">
+      <div id="hub-layout" class="mx-auto flex max-w-6xl items-start justify-center lg:min-h-[calc(100vh-4rem)] lg:items-center">
+        <div class="grid w-full min-w-0 gap-8 lg:grid-cols-[1fr_520px] lg:items-center">
+          <section id="brand-panel" class="block w-full min-w-0">
+            <p class="mt-0 text-sm font-extrabold uppercase tracking-[0.28em] text-teal-700 lg:mt-10">Khanyonis Hub</p>
+            <h1 class="mt-4 max-w-2xl text-4xl font-black leading-[0.95] text-slate-950 sm:text-6xl">Khanyonis Medical Hub</h1>
+            <p class="mt-6 max-w-xl text-base leading-7 text-slate-600 sm:text-lg sm:leading-8">A calm student space prepared for reliable study, online exams, and weekly booking at Khanyonis Hub.</p>
+
+            <div class="hub-supporters-showcase mt-8 w-full max-w-xl min-w-0 rounded-xl border border-white bg-white/60 p-4 shadow-sm">
+              <p class="text-sm font-extrabold text-slate-950">Supporters Gallery</p>
+              <div class="supporter-carousel supporter-carousel--login mt-4 min-w-0" style="--supporter-count: 3;" aria-label="Hub supporters carousel">
+                <div class="supporter-carousel__track supporter-carousel__track--compact">
+                  <div class="supporter-carousel__item supporter-carousel__item--login"><img src="/assets/samir-foundation.png" alt="Samir Foundation" class="max-h-20 w-auto object-contain" /></div>
+                  <div class="supporter-carousel__item supporter-carousel__item--login"><img src="/assets/smile-givers-international.png" alt="Smile Givers International" class="max-h-20 w-auto object-contain" /></div>
+                  <div class="supporter-carousel__item supporter-carousel__item--login"><img src="/assets/wear-the-peace.png" alt="WEAR THE PEACE" class="max-h-20 w-auto object-contain" /></div>
+                  <div class="supporter-carousel__item supporter-carousel__item--login"><img src="/assets/samir-foundation.png" alt="Samir Foundation" class="max-h-20 w-auto object-contain" /></div>
+                  <div class="supporter-carousel__item supporter-carousel__item--login"><img src="/assets/smile-givers-international.png" alt="Smile Givers International" class="max-h-20 w-auto object-contain" /></div>
+                  <div class="supporter-carousel__item supporter-carousel__item--login"><img src="/assets/wear-the-peace.png" alt="WEAR THE PEACE" class="max-h-20 w-auto object-contain" /></div>
+                  <div class="supporter-carousel__item supporter-carousel__item--login"><img src="/assets/samir-foundation.png" alt="Samir Foundation" class="max-h-20 w-auto object-contain" /></div>
+                  <div class="supporter-carousel__item supporter-carousel__item--login"><img src="/assets/smile-givers-international.png" alt="Smile Givers International" class="max-h-20 w-auto object-contain" /></div>
+                  <div class="supporter-carousel__item supporter-carousel__item--login"><img src="/assets/wear-the-peace.png" alt="WEAR THE PEACE" class="max-h-20 w-auto object-contain" /></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-8 grid w-full max-w-xl min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
+              <div class="rounded-lg border border-white bg-white/70 p-4 shadow-sm">
+                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">FOCUS</p>
+                <p class="mt-2 text-sm font-extrabold text-slate-950">Without interruption</p>
+              </div>
+              <div class="rounded-lg border border-white bg-white/70 p-4 shadow-sm">
+                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">PREPARE</p>
+                <p class="mt-2 text-sm font-extrabold text-slate-950">For study and exams</p>
+              </div>
+              <div class="rounded-lg border border-white bg-white/70 p-4 shadow-sm">
+                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">PROGRESS</p>
+                <p class="mt-2 text-sm font-extrabold text-slate-950">Toward your goals</p>
+              </div>
+            </div>
+            <div class="hub-credit mt-8 max-w-xl">
+              <span>Powered by <strong>Samir Foundation</strong></span>
+              <span>Developed by <strong>Eng. Tareq Zourop</strong></span>
+            </div>
+          </section>
+
+          <main class="w-full min-w-0">
+            <section id="auth-panel" class="w-full overflow-hidden rounded-xl border border-white/80 bg-white/95 px-6 py-6 shadow-2xl shadow-slate-900/10 sm:px-8">
+              <div id="login-view">
+                <div class="hub-login-heading mb-6 text-center">
+                  <p class="mt-4 text-sm font-extrabold uppercase tracking-wide text-teal-700">Khanyonis Hub</p>
+                  <h1 class="mt-2 text-2xl font-extrabold text-slate-950">Student login</h1>
+                  <p class="mt-2 text-sm leading-6 text-slate-500">Sign in to book and manage your appointments for Khanyonis Hub.</p>
+                </div>
+                <div class="hub-mobile-login-heading">
+                  <p class="hub-kicker">Student Portal</p>
+                  <h1>Reserve your Medical Hub seat</h1>
+                  <p>Sign in to book a quiet weekly seat with reliable power and internet for study or online exams.</p>
+                </div>
+                <form id="login-form" class="space-y-4" novalidate>
+                  <label class="block" for="login-email">
+                    <span class="block font-medium text-sm text-gray-700">Email</span>
+                    <input class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm mt-1 block w-full" id="login-email" name="email" type="email" required autofocus autocomplete="username" />
+                  </label>
+                  <label class="block" for="login-password">
+                    <span class="block font-medium text-sm text-gray-700">Password</span>
+                    <input class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm mt-1 block w-full" id="login-password" name="password" type="password" required autocomplete="current-password" />
+                  </label>
+                  <div class="flex items-center justify-between gap-3">
+                    <label for="remember-me" class="inline-flex items-center">
+                      <input class="rounded border-gray-300 text-slate-900 shadow-sm focus:ring-slate-700" id="remember-me" name="rememberMe" type="checkbox" />
+                      <span class="ms-2 text-sm text-gray-600">Remember me</span>
+                    </label>
+                    <a class="text-sm font-semibold text-slate-600 hover:text-slate-950" href="https://samirmedicalhub.com/forgot-password">Need help?</a>
+                  </div>
+                  <button type="submit" class="w-full rounded-md bg-slate-950 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-slate-800"><span class="hub-login-button-label--desktop">Login</span><span class="hub-login-button-label--mobile">Log In</span></button>
+                  <p id="login-error" class="hub-feedback hub-hidden" role="alert"></p>
+                  <div class="hub-signup-prompt"><span class="hub-signup-prompt__desktop">New to Khanyonis Hub?</span><span class="hub-signup-prompt__mobile">Not registered yet?</span> <a id="show-signup" href="#signup">Sign up</a></div>
+                  <a class="hub-admin-link" href="/admin/login">Administrator sign in</a>
+                </form>
+              </div>
+
+              <div id="signup-view" class="hub-hidden">
+                <div class="mb-6 text-center">
+                  <p class="mt-4 text-sm font-extrabold uppercase tracking-wide text-teal-700">Khanyonis Hub</p>
+                  <h1 class="mt-2 text-2xl font-extrabold text-slate-950">Create your student account</h1>
+                  <p class="mt-2 text-sm leading-6 text-slate-500">Your study session starts as soon as your account is created.</p>
+                </div>
+                <aside class="hub-mobile-signup-note" dir="rtl" lang="ar" role="note">
+                  <p>للتسجيل، استخدم الاسم والبريد الإلكتروني ورقم الهاتف نفسها المسجّلة سابقًا في الميدكال هب.</p>
+                  <p dir="ltr" lang="en">Use the same name, email, and phone number you previously registered with at Medical Hub.</p>
+                </aside>
+                <form id="signup-form" class="space-y-4" novalidate>
+                  <label class="block" for="signup-name">
+                    <span class="block font-medium text-sm text-gray-700">Full name</span>
+                    <input class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm mt-1 block w-full" id="signup-name" name="fullName" type="text" maxlength="160" required autocomplete="name" />
+                  </label>
+                  <label class="block" for="signup-email">
+                    <span class="block font-medium text-sm text-gray-700">Email</span>
+                    <input class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm mt-1 block w-full" id="signup-email" name="email" type="email" maxlength="254" required autocomplete="email" />
+                  </label>
+                  <label class="block" for="signup-phone">
+                    <span class="block font-medium text-sm text-gray-700">Phone</span>
+                    <input class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm mt-1 block w-full" id="signup-phone" name="phone" type="tel" maxlength="32" required autocomplete="tel" />
+                  </label>
+                  <label class="block" for="signup-password">
+                    <span class="block font-medium text-sm text-gray-700">Password</span>
+                    <input class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm mt-1 block w-full" id="signup-password" name="password" type="password" minlength="8" maxlength="72" required autocomplete="new-password" />
+                  </label>
+                  <button type="submit" class="w-full rounded-md bg-slate-950 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-slate-800">Sign up</button>
+                  <p id="signup-error" class="hub-feedback hub-hidden" role="alert"></p>
+                  <div class="hub-signup-prompt"><span>Already have an account?</span> <a id="show-login" href="#login">Log in</a></div>
+                </form>
+              </div>
+            </section>
+
+            <section id="admin-login-panel" class="w-full overflow-hidden rounded-xl border border-white/80 bg-white/95 px-6 py-6 shadow-2xl shadow-slate-900/10 sm:px-8 hub-hidden" dir="rtl" lang="ar">
+              <div class="hub-card-heading hub-admin-login-heading">
+                <p class="hub-kicker">Khanyonis Medical Hub</p>
+                <h1>أهلًا وسهلًا في منصة إدارة الميدكال هب</h1>
+                <p>سجّل دخولك لمتابعة الطلاب والجلسات والرسائل بكل سهولة.</p>
+              </div>
+              <form id="admin-login-form" class="space-y-4 hub-admin-login-form" novalidate>
+                <label class="block" for="admin-login-email">
+                  <span class="block font-medium text-sm text-gray-700">البريد الإلكتروني</span>
+                  <input id="admin-login-email" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm mt-1 block w-full hub-admin-login-input" name="email" type="email" maxlength="254" required autocomplete="username" dir="ltr" />
+                </label>
+                <label class="block" for="admin-login-password">
+                  <span class="block font-medium text-sm text-gray-700">كلمة المرور</span>
+                  <input id="admin-login-password" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm mt-1 block w-full hub-admin-login-input" name="password" type="password" maxlength="72" required autocomplete="current-password" dir="ltr" />
+                </label>
+                <button type="submit" class="w-full rounded-md bg-slate-950 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-slate-800 hub-button--primary">دخول الإدارة</button>
+                <p id="admin-login-error" class="hub-feedback hub-hidden" role="alert"></p>
+                <a class="hub-back-link" href="/login/khan-younis">العودة إلى دخول الطالب</a>
+              </form>
+            </section>
+
+            <section id="student-dashboard" class="hub-card hub-hidden">
+              <aside class="hub-student-notice" dir="rtl" lang="ar" role="note">
+                <span class="hub-student-notice__icon" aria-hidden="true">!</span>
+                <p>الرجاء تسجيل الخروج قبل المغادرة من الميدكال هب</p>
+              </aside>
+              <div class="hub-dashboard-heading">
+                <div><p class="hub-kicker">Khanyonis Hub</p><h1>Student workspace</h1><p id="student-greeting" class="hub-subtitle"></p></div>
+                <button id="student-logout" type="button" class="hub-button hub-button--secondary">Sign out</button>
+              </div>
+              <div class="hub-stat-grid hub-stat-grid--student">
+                <article class="hub-stat-card"><span>Current status</span><strong id="student-status">Loading</strong></article>
+                <article class="hub-stat-card"><span>Total study time</span><strong id="student-total-time">00:00:00</strong></article>
+                <article class="hub-stat-card"><span>Messages</span><strong id="student-unread-count">0 unread</strong></article>
+              </div>
+              <div class="hub-section-grid">
+                <section class="hub-panel">
+                  <div class="hub-panel-heading"><h2>Current study session</h2><span id="session-badge" class="hub-badge">Loading</span></div>
+                  <p id="student-timer" class="hub-timer">00:00:00</p>
+                  <p id="session-started" class="hub-muted">Session start time will appear here.</p>
+                  <div id="other-active-sessions" class="hub-list"></div>
+                </section>
+                <section class="hub-panel">
+                  <div class="hub-panel-heading"><h2>Messages with the hub</h2></div>
+                  <div id="student-messages" class="hub-conversation-list hub-student-conversation" aria-label="Conversation messages"><p class="hub-muted">Loading messages…</p></div>
+                  <form id="student-message-form" class="hub-admin-compose">
+                    <label for="student-message-body">Send a message or reply</label>
+                    <textarea id="student-message-body" class="hub-textarea" rows="3" maxlength="4000" required></textarea>
+                    <div class="hub-admin-compose-actions">
+                      <p id="student-message-feedback" class="hub-feedback hub-hidden" role="status"></p>
+                      <button type="submit" class="hub-button hub-button--primary">Send message</button>
+                    </div>
+                  </form>
+                </section>
+              </div>
+              <section class="hub-panel hub-panel--spaced">
+                <div class="hub-panel-heading"><h2>Study history</h2></div>
+                <div id="student-history" class="hub-table-wrap"><p class="hub-muted">Loading sessions…</p></div>
+              </section>
+              <footer class="hub-contact-board" dir="rtl" lang="ar">
+                <div class="hub-contact-board__heading">
+                  <p class="hub-admin-kicker">قنوات التواصل</p>
+                  <h2>للتواصل مع المسؤولين:</h2>
+                </div>
+                <div class="hub-contact-grid">
+                  <a class="hub-contact-item" href="tel:0567058487">
+                    <span>المسؤول</span><strong>م.طارق زعرب</strong><bdi dir="ltr">0567058487</bdi>
+                  </a>
+                  <a class="hub-contact-item" href="tel:0597231717">
+                    <span>الدعم الفني :</span><strong>اتصال مباشر</strong><bdi dir="ltr">0597231717</bdi>
+                  </a>
+                  <a class="hub-contact-item" href="mailto:tareqzourop03@gmail.com">
+                    <span>ايميل التواصل :</span><strong>راسل المسؤول</strong><bdi dir="ltr">tareqzourop03@gmail.com</bdi>
+                  </a>
+                </div>
+              </footer>
+            </section>
+
+            <section id="admin-dashboard" class="hub-card hub-admin-dashboard hub-hidden" dir="rtl" lang="ar">
+              <header class="hub-admin-header">
+                <div>
+                  <p class="hub-admin-kicker">نظرة تشغيلية</p>
+                  <h1>صباح التركيز، مشرف</h1>
+                  <p id="admin-greeting" class="hub-subtitle">تابع حضور الطلاب وأنهِ جلساتهم من مكان واحد.</p>
+                </div>
+                <div class="hub-admin-header-actions">
+                  <span id="admin-today" class="hub-admin-date">اليوم</span>
+                  <button id="admin-logout" type="button" class="hub-button hub-button--secondary">تسجيل الخروج</button>
+                </div>
+              </header>
+              <p id="admin-status" class="hub-admin-status hub-hidden" role="status" aria-live="polite"></p>
+
+              <div class="hub-stat-grid hub-stat-grid--admin">
+                <article class="hub-stat-card hub-stat-card--admin">
+                  <div class="hub-stat-card__top"><span>إجمالي الطلاب</span><span class="hub-stat-icon hub-stat-icon--students"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20m6-8a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7-7.7a4 4 0 0 1 0 7.4m3 8.3v-1.5a3.5 3.5 0 0 0-2.5-3.36" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+                  <strong id="admin-students-count">0</strong><small>طلاب مسجلون في الهَب</small>
+                </article>
+                <article class="hub-stat-card hub-stat-card--admin">
+                  <div class="hub-stat-card__top"><span>جلسات نشطة الآن</span><span class="hub-stat-icon hub-stat-icon--active"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v4l2.5 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="18.5" cy="5.5" r="2.5" fill="currentColor"/></svg></span></div>
+                  <strong id="admin-active-count">0</strong><small>تُحتسب لحظيًا</small>
+                </article>
+                <article class="hub-stat-card hub-stat-card--admin">
+                  <div class="hub-stat-card__top"><span>جلسات مكتملة</span><span class="hub-stat-icon hub-stat-icon--completed"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 12.5 4 4L18.5 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/></svg></span></div>
+                  <strong id="admin-completed-count">0</strong><small>حُفظت في سجل الدراسة</small>
+                </article>
+                <article class="hub-stat-card hub-stat-card--admin">
+                  <div class="hub-stat-card__top"><span>وقت الدراسة الكلي</span><span class="hub-stat-icon hub-stat-icon--time"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span></div>
+                  <strong id="admin-total-time" dir="ltr">00:00:00</strong>
+                  <small id="admin-total-period">إجمالي وقت الطلاب — منذ البداية</small>
+                  <button id="admin-reset-total" type="button" class="hub-button hub-button--secondary hub-reset-counter">تصفير العداد</button>
+                </article>
+              </div>
+
+              <section id="admin-counter-archive-panel" class="hub-panel hub-admin-recent-panel hub-hidden">
+                <div class="hub-admin-panel-heading">
+                  <div><p class="hub-admin-kicker">أرشيف الفترات</p><h2>أرشيف عداد الدراسة الشهري</h2></div>
+                  <span class="hub-admin-date">آخر 120 فترة</span>
+                </div>
+                <div id="admin-counter-archive" class="hub-table-wrap"><p class="hub-muted">جارٍ تحميل الأرشيف…</p></div>
+              </section>
+
+              <div class="hub-admin-main-grid">
+                <section id="admin-students-panel" class="hub-panel hub-admin-students-panel">
+                  <div class="hub-admin-panel-heading">
+                    <div><p class="hub-admin-kicker">دليل الطلاب</p><h2>الطلاب المسجلون</h2></div>
+                    <span id="admin-student-total" class="hub-badge">0</span>
+                  </div>
+                  <label class="hub-admin-search-label" for="student-search">ابحث عن طالب</label>
+                  <input id="student-search" class="hub-search hub-search--full" type="search" placeholder="الاسم أو البريد أو الهاتف" aria-label="ابحث بالاسم أو البريد أو الهاتف" />
+                  <div id="admin-students-list" class="hub-student-list"><p class="hub-muted">جارٍ تحميل الطلاب…</p></div>
+                </section>
+
+                <section id="admin-messages-panel" class="hub-panel hub-admin-conversation-panel">
+                  <div class="hub-admin-panel-heading">
+                    <div><p class="hub-admin-kicker">تواصل مباشر</p><h2>محادثة الطالب</h2></div>
+                    <span class="hub-admin-chat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-5 4V5.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span>
+                  </div>
+                  <div id="admin-selected-student" class="hub-selected-student hub-hidden"></div>
+                  <div id="admin-conversation-empty" class="hub-conversation-empty">اختر طالبًا من القائمة لعرض رسائله وإرسال ملاحظة له.</div>
+                  <div id="admin-conversation-list" class="hub-conversation-list"></div>
+                  <form id="admin-message-form" class="hub-admin-compose hub-hidden">
+                    <label for="message-body">اكتب رسالة للطالب</label>
+                    <textarea id="message-body" class="hub-textarea" rows="3" maxlength="4000" required></textarea>
+                    <div class="hub-admin-compose-actions">
+                      <p id="admin-message-feedback" class="hub-feedback hub-hidden" role="status"></p>
+                      <button type="submit" class="hub-button hub-button--primary">إرسال الرسالة</button>
+                    </div>
+                  </form>
+                </section>
+              </div>
+
+              <section class="hub-panel hub-admin-active-panel">
+                <div class="hub-admin-panel-heading">
+                  <div><p class="hub-admin-kicker">إدارة الحضور</p><h2>الجلسات النشطة الآن</h2></div>
+                  <span id="admin-active-count-label" class="hub-badge">0 نشطة</span>
+                </div>
+                <div id="admin-active-sessions" class="hub-active-session-list"><p class="hub-muted">جارٍ تحميل الجلسات…</p></div>
+              </section>
+
+              <section class="hub-panel hub-admin-recent-panel">
+                <div class="hub-admin-panel-heading">
+                  <div><p class="hub-admin-kicker">السجل اليومي</p><h2>آخر الجلسات</h2></div>
+                  <span class="hub-admin-date">أحدث 10 جلسات</span>
+                </div>
+                <div id="admin-recent-sessions" class="hub-table-wrap"><p class="hub-muted">جارٍ تحميل السجل…</p></div>
+              </section>
+            </section>
+          </main>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
