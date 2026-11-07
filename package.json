@@ -4,9 +4,7 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.25.0",
-  "engines": {
-    "node": ">=22.13.0"
-  },
+  "engines": {"node": ">=22.13.0"},
   "scripts": {
     "dev": "node --watch server/index.js",
     "start": "node server/index.js",
@@ -15,9 +13,5 @@
     "build": "node scripts/build.js",
     "db:migrate": "node scripts/migrate.js"
   },
-  "dependencies": {
-    "bcryptjs": "^3.0.2",
-    "express": "^5.1.0",
-    "mysql2": "^3.14.1"
-  }
+  "dependencies": {"bcryptjs": "^3.0.2", "express": "^5.1.0", "pg": "^8.16.3"}
 }
