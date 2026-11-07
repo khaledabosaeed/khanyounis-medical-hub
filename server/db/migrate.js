@@ -10,15 +10,15 @@ export async function migrateDatabase(pool) {
   const connection = await pool.getConnection();
   let locked = false;
   try {
-    const [lockRows] = await connection.query('SELECT GET_LOCK(?, 20) AS acquired', [lockName]);
-    locked = Number(lockRows[0]?.acquired) === 1;
+    const [lockRows] = await connection.query('SELECT pg_try_advisory_lock(hashtext(?)) AS acquired', [lockName]);
+    locked = Boolean(lockRows[0]?.acquired);
     if (!locked) throw new Error('Could not acquire the database migration lock');
 
     await connection.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
-        version VARCHAR(255) NOT NULL PRIMARY KEY,
-        applied_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        version VARCHAR(255) PRIMARY KEY,
+        applied_at TIMESTAMPTZ(3) NOT NULL DEFAULT (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
+      )
     `);
 
     const files = (await readdir(migrationsDirectory))
@@ -34,15 +34,22 @@ export async function migrateDatabase(pool) {
 
       const source = await readFile(resolve(migrationsDirectory, filename), 'utf8');
       const statements = source.split(/;\s*(?:\r?\n|$)/).map((statement) => statement.trim()).filter(Boolean);
-      for (const statement of statements) await connection.query(statement);
-      await connection.execute(
-        'INSERT INTO schema_migrations (version, applied_at) VALUES (?, UTC_TIMESTAMP(3))',
-        [filename],
-      );
+      await connection.beginTransaction();
+      try {
+        for (const statement of statements) await connection.query(statement);
+        await connection.execute(
+          'INSERT INTO schema_migrations (version, applied_at) VALUES (?, (CURRENT_TIMESTAMP AT TIME ZONE \'UTC\'))',
+          [filename],
+        );
+        await connection.commit();
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      }
     }
   } finally {
     if (locked) {
-      try { await connection.query('SELECT RELEASE_LOCK(?)', [lockName]); } catch {}
+      try { await connection.query('SELECT pg_advisory_unlock(hashtext(?)) AS released', [lockName]); } catch {}
     }
     connection.release();
   }
