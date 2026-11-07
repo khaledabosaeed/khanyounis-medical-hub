@@ -74,13 +74,13 @@ export function createAdminRouter({ pool, requirePublicCsrf, requireSessionCsrf 
         SELECT id, open_id AS openId, email, full_name AS fullName,
                password_hash AS passwordHash, admin_role AS role
         FROM admins
-        WHERE email_normalized = ? AND is_active = 1 AND admin_role IN ('owner', 'admin')
+        WHERE email_normalized = ? AND is_active = TRUE AND admin_role = 'owner'
         LIMIT 1
       `, [email]);
       const admin = adminRows[0] || null;
       const comparisonHash = admin?.passwordHash || await getDummyPasswordHash();
       const passwordMatches = await verifyPassword(password, comparisonHash);
-      if (!admin || !['owner', 'admin'].includes(admin.role) || !admin.passwordHash || !passwordMatches) {
+      if (!admin || admin.role !== 'owner' || !admin.passwordHash || !passwordMatches) {
         await pool.execute(`
           INSERT INTO admin_login_attempts (email_normalized, source_hash, attempted_at)
           VALUES (?, ?, UTC_TIMESTAMP(3))
@@ -124,7 +124,7 @@ export function createAdminRouter({ pool, requirePublicCsrf, requireSessionCsrf 
     }
   });
 
-  router.get('/overview', requireAdminAuth, async (_req, res, next) => {
+  router.get('/overview', requireAdminAuth, async (req, res, next) => {
     try {
       const [[students]] = await pool.query('SELECT COUNT(*) AS studentCount FROM students');
       const counter = await getStudyCounterOverview(pool);
