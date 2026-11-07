@@ -54,7 +54,7 @@ export async function bootstrapOwnerAccount(pool) {
     if (existing) {
       const [result] = await connection.execute(`
         UPDATE admins
-        SET password_hash = ?, admin_role = 'owner', is_active = 1
+        SET password_hash = ?, admin_role = 'owner', is_active = TRUE
         WHERE id = ? AND password_hash IS NULL
       `, [passwordHash, existing.id]);
       if (result.affectedRows !== 1) throw bootstrapError('OWNER_INITIALIZATION_NOT_SAVED');
@@ -99,10 +99,10 @@ export function requireAdmin(pool) {
         JOIN admins AS admin ON admin.id = auth.admin_id
         WHERE auth.token_hash = ?
           AND auth.expires_at > UTC_TIMESTAMP(3)
-          AND admin.is_active = 1 AND admin.admin_role IN ('owner', 'admin')
+          AND admin.is_active = TRUE AND admin.admin_role = 'owner'
         LIMIT 1
       `, [tokenHash]);
-      if (!rows.length || !['owner', 'admin'].includes(rows[0].role)) {
+      if (!rows.length || rows[0].role !== 'owner') {
         clearCookie(res, ADMIN_COOKIE);
         return res.status(401).json({ error: 'انتهت جلسة الإدارة. سجّل الدخول مجددًا.', code: 'ADMIN_SESSION_EXPIRED' });
       }
