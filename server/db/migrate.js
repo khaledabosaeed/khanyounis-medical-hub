@@ -10,9 +10,10 @@ export async function migrateDatabase(pool) {
   const connection = await pool.getConnection();
   let locked = false;
   try {
-    const [lockRows] = await connection.query('SELECT pg_try_advisory_lock(hashtext(?)) AS acquired', [lockName]);
-    locked = Boolean(lockRows[0]?.acquired);
-    if (!locked) throw new Error('Could not acquire the database migration lock');
+    // Multiple Vercel instances can start at the same time. Wait for the
+    // current migrator instead of making every losing instance exit.
+    await connection.query('SELECT pg_advisory_lock(hashtext(?))', [lockName]);
+    locked = true;
 
     await connection.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (
