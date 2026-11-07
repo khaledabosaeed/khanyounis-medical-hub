@@ -83,6 +83,9 @@ function toPostgres(sql, params) {
   text = text.replace(/SUM\(\s*([\w.]+)\s*=\s*'([^']+)'\s+AND\s+\(([^()]*)\)\s*\)/g,
     "SUM(CASE WHEN $1 = '$2' AND ($3) THEN 1 ELSE 0 END)");
   text = text.replace(/AS\s+([A-Za-z_][A-Za-z0-9_]*)/g, (_match, alias) => {
+    // IDENTITY is PostgreSQL DDL syntax, not a MySQL-style camelCase alias.
+    // Quoting it turns `GENERATED ... AS IDENTITY` into invalid SQL.
+    if (alias.toUpperCase() === 'IDENTITY') return 'AS IDENTITY';
     return /[A-Z]/.test(alias) ? `AS "${alias}"` : `AS ${alias}`;
   });
 
