@@ -63,7 +63,11 @@ async function start() {
 }
 
 start().catch(async (error) => {
-  console.error('Application startup failed:', { name: error?.name || 'Error', code: error?.code || 'STARTUP_FAILED' });
+  console.error('Application startup failed:', {
+    name: error?.name || 'Error',
+    code: error?.code || 'STARTUP_FAILED',
+    message: error?.message || 'Unknown startup error',
+  });
   try { await pool.end(); } catch {}
   process.exit(1);
 });
