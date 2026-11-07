@@ -62,13 +62,13 @@ function replaceFunction(sql, name, replacer) {
 
 function toPostgres(sql, params) {
   let text = String(sql)
-    .replace(/SELECT\\s+GET_LOCK\\(\\s*\\?\\s*,\\s*20\\s*\\)\\s+AS\\s+acquired/ig, 'SELECT pg_try_advisory_lock(hashtext(?)) AS acquired')
-    .replace(/SELECT\\s+RELEASE_LOCK\\(\\s*\\?\\s*\\)/ig, 'SELECT pg_advisory_unlock(hashtext(?)) AS released')
-    .replace(/DATE_SUB\\(\\s*UTC_TIMESTAMP\\(\\s*3\\s*\\)\\s*,\\s*INTERVAL\\s+1\\s+DAY\\s*\\)/ig, "((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 day')")
-    .replace(/DATE_ADD\\(\\s*UTC_TIMESTAMP\\(\\s*3\\s*\\)\\s*,\\s*INTERVAL\\s+\\?\\s+SECOND\\s*\\)/ig, "((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + (? * INTERVAL '1 second'))")
-    .replace(/DATE_ADD\\(\\s*UTC_TIMESTAMP\\(\\s*3\\s*\\)\\s*,\\s*INTERVAL\\s+8\\s+HOUR\\s*\\)/ig, "((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '8 hours')")
-    .replace(/UTC_TIMESTAMP\\(\\s*3\\s*\\)/ig, "(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')")
-    .replace(/INSERT\\s+IGNORE\\s+INTO/ig, 'INSERT INTO');
+    .replace(/SELECT\s+GET_LOCK\(\s*\?\s*,\s*20\s*\)\s+AS\s+acquired/ig, 'SELECT pg_try_advisory_lock(hashtext(?)) AS acquired')
+    .replace(/SELECT\s+RELEASE_LOCK\(\s*\?\s*\)/ig, 'SELECT pg_advisory_unlock(hashtext(?)) AS released')
+    .replace(/DATE_SUB\(\s*UTC_TIMESTAMP\(\s*3\s*\)\s*,\s*INTERVAL\s+1\s+DAY\s*\)/ig, "((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 day')")
+    .replace(/DATE_ADD\(\s*UTC_TIMESTAMP\(\s*3\s*\)\s*,\s*INTERVAL\s+\?\s+SECOND\s*\)/ig, "((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + (? * INTERVAL '1 second'))")
+    .replace(/DATE_ADD\(\s*UTC_TIMESTAMP\(\s*3\s*\)\s*,\s*INTERVAL\s+8\s+HOUR\s*\)/ig, "((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '8 hours')")
+    .replace(/UTC_TIMESTAMP\(\s*3\s*\)/ig, "(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')")
+    .replace(/INSERT\s+IGNORE\s+INTO/ig, 'INSERT INTO');
 
   text = replaceFunction(text, 'TIMESTAMPDIFF', (args) => {
     if (args.length !== 3 || args[0].toUpperCase() !== 'SECOND') return `TIMESTAMPDIFF(${args.join(', ')})`;
@@ -79,15 +79,15 @@ function toPostgres(sql, params) {
     return `to_char(${args[0]} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
   });
 
-  text = text.replace(/SUM\\(\\s*([\w.]+)\\s*=\\s*'([^']+)'\\s*\\)/g, "SUM(CASE WHEN $1 = '$2' THEN 1 ELSE 0 END)");
-  text = text.replace(/SUM\\(\\s*([\w.]+)\\s*=\\s*'([^']+)'\\s+AND\\s+\\(([^()]*)\\)\\s*\\)/g,
+  text = text.replace(/SUM\(\s*([\w.]+)\s*=\s*'([^']+)'\s*\)/g, "SUM(CASE WHEN $1 = '$2' THEN 1 ELSE 0 END)");
+  text = text.replace(/SUM\(\s*([\w.]+)\s*=\s*'([^']+)'\s+AND\s+\(([^()]*)\)\s*\)/g,
     "SUM(CASE WHEN $1 = '$2' AND ($3) THEN 1 ELSE 0 END)");
-  text = text.replace(/AS\\s+([A-Za-z_][A-Za-z0-9_]*)/g, (_match, alias) => {
+  text = text.replace(/AS\s+([A-Za-z_][A-Za-z0-9_]*)/g, (_match, alias) => {
     return /[A-Z]/.test(alias) ? `AS "${alias}"` : `AS ${alias}`;
   });
 
   let parameterIndex = 0;
-  text = text.replace(/\\?/g, () => `$${++parameterIndex}`);
+  text = text.replace(/\?/g, () => `$${++parameterIndex}`);
   return { text, params };
 }
 
@@ -130,9 +130,9 @@ class PostgresConnection {
 async function runQuery(client, sql, params = []) {
   const converted = toPostgres(sql, params);
   let text = converted.text.trim();
-  const insertTable = text.match(/^INSERT\\s+INTO\\s+([A-Za-z_][A-Za-z0-9_]*)/i)?.[1]?.toLowerCase();
-  if (insertTable && ['students', 'study_sessions', 'messages', 'admins', 'admin_study_counter_archive', 'admin_login_attempts'].includes(insertTable) && !/\\bRETURNING\\b/i.test(text)) {
-    text = `${text.replace(/;\\s*$/, '')} RETURNING id`;
+  const insertTable = text.match(/^INSERT\s+INTO\s+([A-Za-z_][A-Za-z0-9_]*)/i)?.[1]?.toLowerCase();
+  if (insertTable && ['students', 'study_sessions', 'messages', 'admins', 'admin_study_counter_archive', 'admin_login_attempts'].includes(insertTable) && !/\bRETURNING\b/i.test(text)) {
+    text = `${text.replace(/;\s*$/, '')} RETURNING id`;
   }
   try {
     const result = await client.query({ text, values: converted.params });
