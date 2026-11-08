@@ -66,7 +66,7 @@ export async function bootstrapOwnerAccount(pool) {
         open_id, email, email_normalized, full_name, password_hash,
         admin_role, is_active, created_at, last_login_at
       )
-      VALUES (?, ?, ?, ?, ?, 'owner', 1, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))
+      VALUES (?, ?, ?, ?, ?, 'owner', TRUE, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))
     `, [`local:${randomToken(24)}`, email, email, 'مالك منصة الميدكال هب', passwordHash]);
     if (result.affectedRows !== 1) throw bootstrapError('OWNER_INITIALIZATION_NOT_SAVED');
     return { created: true, reusedAccount: false };

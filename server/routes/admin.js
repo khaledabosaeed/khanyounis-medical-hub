@@ -195,7 +195,7 @@ export function createAdminRouter({ pool, requirePublicCsrf, requireSessionCsrf 
         FROM study_sessions AS session
         JOIN students AS student ON student.id = session.student_id
         WHERE (? = 'all' OR session.status = ?)
-          AND (? = '' OR session.student_id = ?)
+          AND (? = '' OR session.student_id = NULLIF(?, '')::bigint)
         ORDER BY (session.status = 'active') DESC, session.started_at DESC
         LIMIT 1000
       `, [status, status, studentId, studentId]);

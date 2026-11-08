@@ -53,20 +53,20 @@ export async function resetStudyCounter(pool, adminId) {
     if (counterRows.length !== 1) throw new Error('Study counter configuration is missing');
     const [[counter]] = await connection.execute(`
       SELECT reset_at AS resetAt, reset_version AS counterVersion,
-             UTC_TIMESTAMP(3) AS resetNow
+             CURRENT_TIMESTAMP(3) AS resetNow
       FROM admin_study_counter WHERE id = 1
     `);
 
     const [[period]] = await connection.execute(`
       SELECT
         COALESCE(SUM(session.status = 'completed'
-          AND (? IS NULL OR session.ended_at >= ?)), 0) AS completedCount,
+          AND (?::timestamptz IS NULL OR session.ended_at >= ?::timestamptz)), 0) AS completedCount,
         COALESCE(SUM(CASE
-          WHEN ? IS NULL AND session.status = 'completed' THEN session.duration_seconds
-          WHEN ? IS NULL THEN GREATEST(0, TIMESTAMPDIFF(SECOND, session.started_at, ?))
+          WHEN ?::timestamptz IS NULL AND session.status = 'completed' THEN session.duration_seconds
+          WHEN ?::timestamptz IS NULL THEN GREATEST(0, TIMESTAMPDIFF(SECOND, session.started_at, ?::timestamptz))
           ELSE GREATEST(0, TIMESTAMPDIFF(SECOND,
-            GREATEST(session.started_at, ?),
-            LEAST(COALESCE(session.ended_at, ?), ?)))
+            GREATEST(session.started_at, ?::timestamptz),
+            LEAST(COALESCE(session.ended_at, ?::timestamptz), ?::timestamptz)))
         END), 0) AS totalSeconds
       FROM study_sessions AS session
     `, [counter.resetAt, counter.resetAt, counter.resetAt, counter.resetAt, counter.resetNow,

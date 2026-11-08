@@ -64,9 +64,9 @@ function toPostgres(sql, params) {
   let text = String(sql)
     .replace(/SELECT\s+GET_LOCK\(\s*\?\s*,\s*20\s*\)\s+AS\s+acquired/ig, 'SELECT pg_try_advisory_lock(hashtext(?)) AS acquired')
     .replace(/SELECT\s+RELEASE_LOCK\(\s*\?\s*\)/ig, 'SELECT pg_advisory_unlock(hashtext(?)) AS released')
-    .replace(/DATE_SUB\(\s*UTC_TIMESTAMP\(\s*3\s*\)\s*,\s*INTERVAL\s+1\s+DAY\s*\)/ig, "((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') - INTERVAL '1 day')")
+    .replace(/DATE_(ADD|SUB)\(\s*UTC_TIMESTAMP\(\s*3\s*\)\s*,\s*INTERVAL\s+(\d+)\s+(SECOND|MINUTE|HOUR|DAY)\s*\)/ig,
+      (_match, op, amount, unit) => `((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') ${op.toUpperCase() === 'ADD' ? '+' : '-'} INTERVAL '${amount} ${unit.toLowerCase()}')`)
     .replace(/DATE_ADD\(\s*UTC_TIMESTAMP\(\s*3\s*\)\s*,\s*INTERVAL\s+\?\s+SECOND\s*\)/ig, "((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + (? * INTERVAL '1 second'))")
-    .replace(/DATE_ADD\(\s*UTC_TIMESTAMP\(\s*3\s*\)\s*,\s*INTERVAL\s+8\s+HOUR\s*\)/ig, "((CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + INTERVAL '8 hours')")
     .replace(/UTC_TIMESTAMP\(\s*3\s*\)/ig, "(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')")
     .replace(/INSERT\s+IGNORE\s+INTO/ig, 'INSERT INTO');
 
@@ -144,6 +144,9 @@ async function runQuery(client, sql, params = []) {
       insertId: result.rows[0]?.id == null ? undefined : result.rows[0].id,
       rowCount: result.rowCount,
     };
+    // Callers use the mysql2 contract: writes resolve to [ResultSetHeader, ...]
+    // (`const [result] = ...; result.insertId`), reads resolve to [rows, ...].
+    if (['INSERT', 'UPDATE', 'DELETE'].includes(result.command)) return [metadata, result.rows];
     return [result.rows, metadata];
   } catch (error) {
     throw adaptError(error);
