@@ -72,11 +72,19 @@ export async function resetStudyCounter(pool, adminId) {
     `, [counter.resetAt, counter.resetAt, counter.resetAt, counter.resetAt, counter.resetNow,
       counter.resetAt, counter.resetNow, counter.resetNow]);
 
-    await connection.execute(`
+    const [archived] = await connection.execute(`
       INSERT INTO admin_study_counter_archive
         (period_started_at, period_ended_at, completed_session_count, total_seconds, archived_by_admin_id)
       VALUES (?, ?, ?, ?, ?)
     `, [counter.resetAt, counter.resetNow, Number(period.completedCount || 0), Number(period.totalSeconds || 0), adminId]);
+
+    // Move every completed session into this archive period. Active sessions
+    // stay live and are archived by a later reset once they have ended.
+    const [moved] = await connection.execute(`
+      UPDATE study_sessions
+      SET archived_at = ?, archive_period_id = ?
+      WHERE status = 'completed' AND archived_at IS NULL
+    `, [counter.resetNow, archived.insertId ?? null]);
 
     await connection.execute(`
       UPDATE admin_study_counter
@@ -93,6 +101,7 @@ export async function resetStudyCounter(pool, adminId) {
       ok: true,
       totalSeconds: 0,
       completedSessionCount: 0,
+      archivedSessionCount: Number(moved.affectedRows || 0),
       activeSessionCount: Number(updated.activeCount || 0),
       counterResetAt: toIsoUtc(updated.resetAt),
       counterVersion: Number(updated.counterVersion),

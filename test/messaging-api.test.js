@@ -98,6 +98,12 @@ test('students and admins can exchange messages with ownership and read states p
   const studentMessages = (await studentRead.json()).messages;
   assert.ok(studentMessages.some((message) => message.senderRole === 'admin' && message.createdByAdmin));
   assert.ok(studentMessages.some((message) => message.senderRole === 'student' && !message.createdByAdmin));
+  assert.ok(!pool.calls.some((call) => call.sql.startsWith('UPDATE messages')), 'loading the conversation must not mark messages as read');
+
+  const studentMarkRead = await fetch(`${origin}/api/student/messages/read`, {
+    method: 'POST', headers: { cookie: studentCookie, 'content-type': 'application/json' }, body: '{}',
+  });
+  assert.equal(studentMarkRead.status, 200);
   const studentReadQuery = pool.calls.find((call) => call.sql.startsWith('UPDATE messages') && call.sql.includes("sender_role = 'admin'"));
   assert.ok(studentReadQuery, 'student reads must only mark incoming admin messages as read');
   assert.equal(studentReadQuery.params[0], '7');

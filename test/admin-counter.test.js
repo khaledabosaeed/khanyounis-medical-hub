@@ -16,17 +16,37 @@ const fixtures = [
 ];
 
 function makePool() {
-  const state = { now, resetAt: null, version: 0, owner: null, calls: [], events: [], failRead: false, sessions: structuredClone(fixtures) };
+  const state = { now, resetAt: null, version: 0, owner: null, calls: [], events: [], failRead: false, sessions: structuredClone(fixtures), archive: [] };
   const activeCount = () => state.sessions.filter(s => s.status === 'active').length;
   let snapshot;
   const connection = {
-    async beginTransaction() { snapshot = { resetAt: state.resetAt, version: state.version, owner: state.owner }; state.events.push('begin'); },
+    async beginTransaction() {
+      snapshot = { resetAt: state.resetAt, version: state.version, owner: state.owner, sessions: structuredClone(state.sessions), archive: structuredClone(state.archive) };
+      state.events.push('begin');
+    },
     async execute(sql, params = []) {
       const normalized = sql.replace(/\s+/g, ' ').trim();
       state.calls.push({ sql: normalized, params });
       if (normalized === 'SELECT id FROM admin_study_counter WHERE id = 1 FOR UPDATE') return [[{ id: 1 }], []];
+      if (normalized.startsWith('SELECT reset_at AS resetAt, reset_version AS counterVersion, CURRENT_TIMESTAMP(3) AS resetNow')) {
+        return [[{ resetAt: state.resetAt === null ? null : new Date(state.resetAt), counterVersion: state.version, resetNow: new Date(state.now) }], []];
+      }
+      if (normalized.startsWith('SELECT COALESCE(SUM(session.status')) {
+        const completed = state.sessions.filter(s => s.status === 'completed' && !s.archivedAt);
+        return [[{ completedCount: completed.length, totalSeconds: completed.reduce((sum, s) => sum + s.duration, 0) }], []];
+      }
+      if (normalized.startsWith('INSERT INTO admin_study_counter_archive')) {
+        state.archive.push({ id: String(state.archive.length + 1), periodStartedAt: params[0], periodEndedAt: params[1], completed: params[2], seconds: params[3] });
+        return [{ affectedRows: 1, insertId: String(state.archive.length) }, []];
+      }
+      if (normalized.startsWith('UPDATE study_sessions SET archived_at')) {
+        assert.match(normalized, /WHERE status = 'completed' AND archived_at IS NULL/);
+        const targets = state.sessions.filter(s => s.status === 'completed' && !s.archivedAt);
+        targets.forEach(s => { s.archivedAt = params[0]; s.periodId = params[1]; });
+        return [{ affectedRows: targets.length }, []];
+      }
       if (normalized.startsWith('UPDATE admin_study_counter')) {
-        state.resetAt = state.now; state.version += 1; state.owner = params[0];
+        state.resetAt = state.now; state.version += 1; state.owner = params[1];
         return [{ affectedRows: 1 }, []];
       }
       if (normalized.startsWith('SELECT reset_at AS resetAt')) {
@@ -64,7 +84,7 @@ function makePool() {
   };
 }
 
-test('counter reset zeros only the administrative total and preserves session history and individual durations', async () => {
+test('counter reset zeros the administrative total and moves completed sessions to the archive without deleting anything', async () => {
   const pool = makePool();
   const originalSessions = structuredClone(pool.state.sessions);
   const before = await getStudyCounterOverview(pool);
@@ -75,8 +95,19 @@ test('counter reset zeros only the administrative total and preserves session hi
   assert.equal(reset.counterVersion, 1);
   assert.equal(pool.state.owner, '8');
   assert.deepEqual(pool.state.events, ['begin', 'commit', 'release']);
-  assert.deepEqual(pool.state.sessions, originalSessions);
-  assert.ok(pool.state.calls.every(call => !/DELETE|UPDATE study_sessions|UPDATE students/i.test(call.sql)));
+  assert.equal(reset.archivedSessionCount, 2);
+  assert.equal(pool.state.archive.length, 1);
+  assert.equal(pool.state.archive[0].completed, 2);
+  assert.equal(pool.state.archive[0].seconds, 3600 + 7200);
+  for (const session of pool.state.sessions) {
+    const original = originalSessions.find(item => item.id === session.id);
+    assert.equal(session.duration, original.duration, 'durations never change');
+    assert.equal(session.status, original.status, 'active sessions keep running');
+    assert.equal(Boolean(session.archivedAt), session.status === 'completed', 'only completed sessions are archived');
+    if (session.archivedAt) assert.equal(session.periodId, '1');
+  }
+  assert.equal(pool.state.sessions.length, originalSessions.length, 'nothing is deleted');
+  assert.ok(pool.state.calls.every(call => !/DELETE|UPDATE students/i.test(call.sql)));
 
   assert.equal((await getStudyCounterOverview(pool)).totalSeconds, 0, 'a fresh request uses the saved baseline');
   pool.state.now += 30000;
@@ -109,6 +140,7 @@ test('reset rolls back its baseline if the transaction does not complete', async
   await assert.rejects(resetStudyCounter(pool, '8'), /Simulated database failure/);
   assert.equal(pool.state.resetAt, null);
   assert.equal(pool.state.version, 0);
+  assert.ok(pool.state.sessions.every(session => !session.archivedAt), 'archiving rolls back with the reset');
   assert.deepEqual(pool.state.events, ['begin', 'rollback', 'release']);
 });
 
