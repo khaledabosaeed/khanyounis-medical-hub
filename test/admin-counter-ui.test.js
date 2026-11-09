@@ -53,7 +53,7 @@ test('reset UI confirms, submits once with CSRF, displays zero, and ignores an o
   fixture.respond({ totalSeconds: 0, activeSessionCount: 2, counterVersion: 1, counterResetAt: '2026-10-19T12:00:00.000Z' });
   await pending;
   assert.equal(nodes.get('admin-total-time').textContent, '00:00:00');
-  assert.match(nodes.get('admin-total-period').textContent, /منذ آخر تصفير/);
+  assert.match(nodes.get('admin-total-period').textContent, /Since last reset/);
   assert.equal(nodes.get('admin-reset-total').disabled, false);
   window.counterTest.renderAdminCounter({ totalSeconds: 7200, activeSessionCount: 2, counterVersion: 0 });
   assert.equal(nodes.get('admin-total-time').textContent, '00:00:00', 'a response started before reset must not restore old totals');
@@ -66,10 +66,10 @@ test('a failed reset does not change the current total or baseline and re-enable
   fixture.window.counterTest.renderAdminCounter({ totalSeconds: 1800, activeSessionCount: 0, counterVersion: 3 });
   fixture.window.confirm = () => true;
   const pending = fixture.click();
-  fixture.respond({ error: 'تعذر حفظ التصفير.' }, false);
+  fixture.respond({ error: 'Could not save the reset.' }, false);
   await pending;
   assert.equal(fixture.nodes.get('admin-total-time').textContent, '00:30:00');
   assert.equal(fixture.window.counterTest.state.adminCounterVersion, 3);
   assert.equal(fixture.nodes.get('admin-reset-total').disabled, false);
-  assert.match(fixture.nodes.get('admin-status').textContent, /تعذر/);
+  assert.match(fixture.nodes.get('admin-status').textContent, /Could not/);
 });

@@ -31,7 +31,7 @@ app.use('/api/admin', createAdminRouter({ pool, requirePublicCsrf, requireSessio
 app.use('/api', (_req, res) => res.status(404).json({ error: 'API route not found.', code: 'API_NOT_FOUND' }));
 
 app.use(createStaticMiddleware(publicRoot));
-app.get(['/', '/login/khan-younis', '/student', '/admin', '/admin/login'], (_req, res) => {
+app.get(['/', '/login/khan-younis', '/student', '/admin', '/admin/archive', '/admin/login'], (_req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   return res.sendFile(resolve(publicRoot, 'index.html'));
 });

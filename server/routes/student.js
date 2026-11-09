@@ -2,9 +2,7 @@ import { Router } from 'express';
 import { inTransaction } from '../db/transaction.js';
 import { requireStudent } from '../auth/student.js';
 import { normalizeEmail, hashPassword, verifyPassword, randomToken, hashOpaqueToken, setCookie, clearCookie, STUDENT_COOKIE } from '../security.js';
-
-const REMEMBER_SECONDS = 30 * 24 * 60 * 60;
-const SESSION_SECONDS = 12 * 60 * 60;
+import { STUDENT_SESSION_SECONDS } from '../auth/student.js';
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phonePattern = /^\+?[0-9 ()-]{7,32}$/;
 
@@ -32,33 +30,54 @@ function validateRegistration(body = {}) {
   return { fullName, email, phone, password };
 }
 
-async function createStudyAndAuthSession(connection, studentId, tokenHash, csrfToken, lifetime) {
-  const [sessionResult] = await connection.execute(`
-    INSERT INTO study_sessions (student_id, started_at, status, created_at)
-    VALUES (?, UTC_TIMESTAMP(3), 'active', UTC_TIMESTAMP(3))
+// Links a new sign-in to the student's study session. If the student already
+// has an active study session (for example after their sign-in was lost or
+// they signed in on another device), that session is resumed instead of a
+// second one being started. The student row is locked so two simultaneous
+// logins cannot both create a session.
+async function attachStudyAndAuthSession(connection, studentId, tokenHash, csrfToken) {
+  await connection.execute('SELECT id FROM students WHERE id = ? FOR UPDATE', [studentId]);
+  const [activeRows] = await connection.execute(`
+    SELECT id FROM study_sessions
+    WHERE student_id = ? AND status = 'active'
+    ORDER BY started_at DESC
+    LIMIT 1
   `, [studentId]);
-  const studySessionId = String(sessionResult.insertId);
+  let studySessionId = activeRows[0]?.id == null ? null : String(activeRows[0].id);
+  const resumed = studySessionId !== null;
+  if (!resumed) {
+    const [sessionResult] = await connection.execute(`
+      INSERT INTO study_sessions (student_id, started_at, status, created_at)
+      VALUES (?, UTC_TIMESTAMP(3), 'active', UTC_TIMESTAMP(3))
+    `, [studentId]);
+    studySessionId = String(sessionResult.insertId);
+  }
   await connection.execute(`
     INSERT INTO student_auth_sessions
       (token_hash, student_id, current_study_session_id, csrf_token, created_at, expires_at)
     VALUES (?, ?, ?, ?, UTC_TIMESTAMP(3), DATE_ADD(UTC_TIMESTAMP(3), INTERVAL ? SECOND))
-  `, [tokenHash, studentId, studySessionId, csrfToken, lifetime]);
+  `, [tokenHash, studentId, studySessionId, csrfToken, STUDENT_SESSION_SECONDS]);
   const [rows] = await connection.execute(`
     SELECT id, DATE_FORMAT(started_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS startedAt,
            status, duration_seconds AS durationSeconds
     FROM study_sessions WHERE id = ? AND student_id = ? LIMIT 1
   `, [studySessionId, studentId]);
-  return rows[0];
+  return { ...rows[0], id: String(rows[0]?.id ?? studySessionId), resumed };
 }
 
-async function beginStudentSession(pool, studentId, rememberMe) {
+async function beginStudentSession(pool, studentId) {
   const token = randomToken();
   const csrfToken = randomToken();
   const tokenHash = hashOpaqueToken(token);
-  const lifetime = rememberMe ? REMEMBER_SECONDS : SESSION_SECONDS;
   const studySession = await inTransaction(pool, (connection) =>
-    createStudyAndAuthSession(connection, studentId, tokenHash, csrfToken, lifetime));
-  return { token, csrfToken, lifetime, rememberMe, studySession };
+    attachStudyAndAuthSession(connection, studentId, tokenHash, csrfToken));
+  return { token, csrfToken, studySession };
+}
+
+function setStudentCookie(res, token) {
+  // Always persistent: the sign-in survives closing the browser, and the
+  // server extends it while the student keeps using the hub.
+  setCookie(res, STUDENT_COOKIE, token, { maxAge: STUDENT_SESSION_SECONDS * 1000 });
 }
 
 export function createStudentRouter({ pool, requirePublicCsrf, requireSessionCsrf }) {
@@ -72,18 +91,16 @@ export function createStudentRouter({ pool, requirePublicCsrf, requireSessionCsr
       const token = randomToken();
       const csrfToken = randomToken();
       const tokenHash = hashOpaqueToken(token);
-      const rememberMe = Boolean(req.body.rememberMe);
-      const lifetime = rememberMe ? REMEMBER_SECONDS : SESSION_SECONDS;
       const created = await inTransaction(pool, async (connection) => {
         const [insert] = await connection.execute(`
           INSERT INTO students (full_name, email, email_normalized, phone, password_hash, created_at, updated_at)
           VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))
         `, [registration.fullName, registration.email, registration.email, registration.phone, passwordHash]);
         const student = { id: String(insert.insertId), ...registration };
-        const studySession = await createStudyAndAuthSession(connection, student.id, tokenHash, csrfToken, lifetime);
+        const studySession = await attachStudyAndAuthSession(connection, student.id, tokenHash, csrfToken);
         return { student, studySession };
       });
-      setCookie(res, STUDENT_COOKIE, token, rememberMe ? { maxAge: lifetime * 1000 } : {});
+      setStudentCookie(res, token);
       return res.status(201).json({ student: publicStudent(created.student), studySession: created.studySession, csrfToken });
     } catch (error) {
       if (error?.code === 'ER_DUP_ENTRY') {
@@ -108,9 +125,12 @@ export function createStudentRouter({ pool, requirePublicCsrf, requireSessionCsr
         return res.status(401).json({ error: 'Email or password is incorrect.', code: 'LOGIN_INVALID' });
       }
       const student = rows[0];
-      const login = await beginStudentSession(pool, student.id, Boolean(req.body?.rememberMe));
-      setCookie(res, STUDENT_COOKIE, login.token, login.rememberMe ? { maxAge: login.lifetime * 1000 } : {});
-      return res.json({ student: publicStudent(student), studySession: login.studySession, csrfToken: login.csrfToken });
+      const login = await beginStudentSession(pool, student.id);
+      setStudentCookie(res, login.token);
+      return res.json({
+        student: publicStudent(student), studySession: login.studySession,
+        resumedSession: login.studySession.resumed, csrfToken: login.csrfToken,
+      });
     } catch (error) {
       return next(error);
     }
@@ -198,6 +218,11 @@ export function createStudentRouter({ pool, requirePublicCsrf, requireSessionCsr
                 status = 'completed'
             WHERE id = ? AND student_id = ? AND status = 'active'
           `, [req.student.currentStudySessionId, req.student.id]);
+          // Other devices attached to the same study session are signed out too.
+          await connection.execute(
+            'DELETE FROM student_auth_sessions WHERE current_study_session_id = ? AND student_id = ?',
+            [req.student.currentStudySessionId, req.student.id],
+          );
         }
         await connection.execute('DELETE FROM student_auth_sessions WHERE token_hash = ?', [req.student.tokenHash]);
       });
@@ -223,9 +248,17 @@ export function createStudentRouter({ pool, requirePublicCsrf, requireSessionCsr
     }
   });
 
+  // Messages are marked read explicitly (opening a notification, focusing the
+  // reply box, or replying) so polling the conversation keeps unread ones visible.
+  router.post('/messages/read', requireStudentAuth, requireSessionCsrf, async (req, res, next) => {
+    try {
+      const [result] = await pool.execute("UPDATE messages SET read_at = COALESCE(read_at, UTC_TIMESTAMP(3)) WHERE student_id = ? AND sender_role = 'admin' AND read_at IS NULL", [req.student.id]);
+      return res.json({ ok: true, updatedCount: Number(result.affectedRows || 0) });
+    } catch (error) { return next(error); }
+  });
+
   router.get('/messages', requireStudentAuth, async (req, res, next) => {
     try {
-      await pool.execute("UPDATE messages SET read_at = COALESCE(read_at, UTC_TIMESTAMP(3)) WHERE student_id = ? AND sender_role = 'admin' AND read_at IS NULL", [req.student.id]);
       const [rows] = await pool.execute(`
         SELECT id, body,
                DATE_FORMAT(created_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS createdAt,

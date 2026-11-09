@@ -6,6 +6,9 @@
     <meta name="theme-color" content="#eef2f0" />
     <meta name="description" content="Khanyonis Medical Hub — a calm student space for study, online exams, and weekly booking." />
     <title>Hub Login - Medical Hub - Samir Foundation</title>
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.bunny.net" />
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700,800,900&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="/assets/khanyonis-login.css" />
@@ -80,11 +83,7 @@
                     <span class="block font-medium text-sm text-gray-700">Password</span>
                     <input class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm mt-1 block w-full" id="login-password" name="password" type="password" required autocomplete="current-password" />
                   </label>
-                  <div class="flex items-center justify-between gap-3">
-                    <label for="remember-me" class="inline-flex items-center">
-                      <input class="rounded border-gray-300 text-slate-900 shadow-sm focus:ring-slate-700" id="remember-me" name="rememberMe" type="checkbox" />
-                      <span class="ms-2 text-sm text-gray-600">Remember me</span>
-                    </label>
+                  <div class="flex items-center justify-end gap-3">
                     <a class="text-sm font-semibold text-slate-600 hover:text-slate-950" href="https://samirmedicalhub.com/forgot-password">Need help?</a>
                   </div>
                   <button type="submit" class="w-full rounded-md bg-slate-950 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-slate-800"><span class="hub-login-button-label--desktop">Login</span><span class="hub-login-button-label--mobile">Log In</span></button>
@@ -128,24 +127,24 @@
               </div>
             </section>
 
-            <section id="admin-login-panel" class="w-full overflow-hidden rounded-xl border border-white/80 bg-white/95 px-6 py-6 shadow-2xl shadow-slate-900/10 sm:px-8 hub-hidden" dir="rtl" lang="ar">
+            <section id="admin-login-panel" class="w-full overflow-hidden rounded-xl border border-white/80 bg-white/95 px-6 py-6 shadow-2xl shadow-slate-900/10 sm:px-8 hub-hidden">
               <div class="hub-card-heading hub-admin-login-heading">
                 <p class="hub-kicker">Khanyonis Medical Hub</p>
-                <h1>أهلًا وسهلًا في منصة إدارة الميدكال هب</h1>
-                <p>سجّل دخولك لمتابعة الطلاب والجلسات والرسائل بكل سهولة.</p>
+                <h1>Welcome to the Medical Hub admin console</h1>
+                <p>Sign in to follow students, study sessions and messages in one place.</p>
               </div>
               <form id="admin-login-form" class="space-y-4 hub-admin-login-form" novalidate>
                 <label class="block" for="admin-login-email">
-                  <span class="block font-medium text-sm text-gray-700">البريد الإلكتروني</span>
-                  <input id="admin-login-email" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm mt-1 block w-full hub-admin-login-input" name="email" type="email" maxlength="254" required autocomplete="username" dir="ltr" />
+                  <span class="block font-medium text-sm text-gray-700">Email</span>
+                  <input id="admin-login-email" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm mt-1 block w-full hub-admin-login-input" name="email" type="email" maxlength="254" required autocomplete="username" />
                 </label>
                 <label class="block" for="admin-login-password">
-                  <span class="block font-medium text-sm text-gray-700">كلمة المرور</span>
-                  <input id="admin-login-password" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm mt-1 block w-full hub-admin-login-input" name="password" type="password" maxlength="72" required autocomplete="current-password" dir="ltr" />
+                  <span class="block font-medium text-sm text-gray-700">Password</span>
+                  <input id="admin-login-password" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm mt-1 block w-full hub-admin-login-input" name="password" type="password" maxlength="72" required autocomplete="current-password" />
                 </label>
-                <button type="submit" class="w-full rounded-md bg-slate-950 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-slate-800 hub-button--primary">دخول الإدارة</button>
+                <button type="submit" class="w-full rounded-md bg-slate-950 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-slate-800 hub-button--primary">Sign in</button>
                 <p id="admin-login-error" class="hub-feedback hub-hidden" role="alert"></p>
-                <a class="hub-back-link" href="/login/khan-younis">العودة إلى دخول الطالب</a>
+                <a class="hub-back-link" href="/login/khan-younis">Back to student login</a>
               </form>
             </section>
 
@@ -156,7 +155,19 @@
               </aside>
               <div class="hub-dashboard-heading">
                 <div><p class="hub-kicker">Khanyonis Hub</p><h1>Student workspace</h1><p id="student-greeting" class="hub-subtitle"></p></div>
-                <button id="student-logout" type="button" class="hub-button hub-button--secondary">Sign out</button>
+                <div class="hub-dashboard-actions">
+                  <div id="student-notify" class="hub-notify">
+                  <button id="student-notify-button" type="button" class="hub-notify__button" aria-haspopup="true" aria-expanded="false" aria-controls="student-notify-panel" aria-label="Notifications: no new messages">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9.5a6 6 0 1 1 12 0c0 4.5 1.8 6 1.8 6H4.2S6 14 6 9.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                    <span id="student-notify-count" class="hub-notify__count hub-hidden" aria-hidden="true">0</span>
+                  </button>
+                  <div id="student-notify-panel" class="hub-notify__panel hub-hidden" role="region" aria-label="New messages">
+                    <p class="hub-notify__title">New messages</p>
+                    <div id="student-notify-list" class="hub-notify__list"><p class="hub-notify__empty">No new messages.</p></div>
+                  </div>
+                </div>
+                  <button id="student-logout" type="button" class="hub-button hub-button--logout">Sign out</button>
+                </div>
               </div>
               <div class="hub-stat-grid hub-stat-grid--student">
                 <article class="hub-stat-card"><span>Current status</span><strong id="student-status">Loading</strong></article>
@@ -170,12 +181,12 @@
                   <p id="session-started" class="hub-muted">Session start time will appear here.</p>
                   <div id="other-active-sessions" class="hub-list"></div>
                 </section>
-                <section class="hub-panel">
+                <section id="student-messages-panel" class="hub-panel">
                   <div class="hub-panel-heading"><h2>Messages with the hub</h2></div>
                   <div id="student-messages" class="hub-conversation-list hub-student-conversation" aria-label="Conversation messages"><p class="hub-muted">Loading messages…</p></div>
                   <form id="student-message-form" class="hub-admin-compose">
                     <label for="student-message-body">Send a message or reply</label>
-                    <textarea id="student-message-body" class="hub-textarea" rows="3" maxlength="4000" required></textarea>
+                    <textarea id="student-message-body" class="hub-textarea" rows="3" maxlength="4000" required dir="auto"></textarea>
                     <div class="hub-admin-compose-actions">
                       <p id="student-message-feedback" class="hub-feedback hub-hidden" role="status"></p>
                       <button type="submit" class="hub-button hub-button--primary">Send message</button>
@@ -206,74 +217,91 @@
               </footer>
             </section>
 
-            <section id="admin-dashboard" class="hub-card hub-admin-dashboard hub-hidden" dir="rtl" lang="ar">
+            <section id="admin-dashboard" class="hub-card hub-admin-dashboard hub-hidden">
               <header class="hub-admin-header">
                 <div>
-                  <p class="hub-admin-kicker">نظرة تشغيلية</p>
-                  <h1>صباح التركيز، مشرف</h1>
-                  <p id="admin-greeting" class="hub-subtitle">تابع حضور الطلاب وأنهِ جلساتهم من مكان واحد.</p>
+                  <p class="hub-admin-kicker">Operations overview</p>
+                  <h1>Medical Hub dashboard</h1>
+                  <p id="admin-greeting" class="hub-subtitle">Follow student attendance and manage study sessions from one place.</p>
                 </div>
                 <div class="hub-admin-header-actions">
-                  <span id="admin-today" class="hub-admin-date">اليوم</span>
-                  <button id="admin-logout" type="button" class="hub-button hub-button--secondary">تسجيل الخروج</button>
+                  <span id="admin-role-badge" class="hub-badge hub-badge--viewer hub-hidden">View only</span>
+                  <span id="admin-today" class="hub-admin-date">Today</span>
+                  <div id="admin-notify" class="hub-notify">
+                  <button id="admin-notify-button" type="button" class="hub-notify__button" aria-haspopup="true" aria-expanded="false" aria-controls="admin-notify-panel" aria-label="Notifications: no new messages">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9.5a6 6 0 1 1 12 0c0 4.5 1.8 6 1.8 6H4.2S6 14 6 9.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                    <span id="admin-notify-count" class="hub-notify__count hub-hidden" aria-hidden="true">0</span>
+                  </button>
+                  <div id="admin-notify-panel" class="hub-notify__panel hub-hidden" role="region" aria-label="New messages">
+                    <p class="hub-notify__title">New messages</p>
+                    <div id="admin-notify-list" class="hub-notify__list"><p class="hub-notify__empty">No new messages.</p></div>
+                  </div>
+                </div>
+                  <button id="admin-logout" type="button" class="hub-button hub-button--secondary">Sign out</button>
                 </div>
               </header>
+              <nav id="admin-nav" class="hub-admin-nav" aria-label="Admin pages">
+                <a href="/admin" data-admin-page="/admin" aria-current="page">Dashboard</a>
+                <a href="/admin/archive" data-admin-page="/admin/archive">Daily archive</a>
+              </nav>
               <p id="admin-status" class="hub-admin-status hub-hidden" role="status" aria-live="polite"></p>
+
+              <div id="admin-main-view">
 
               <div class="hub-stat-grid hub-stat-grid--admin">
                 <article class="hub-stat-card hub-stat-card--admin">
-                  <div class="hub-stat-card__top"><span>إجمالي الطلاب</span><span class="hub-stat-icon hub-stat-icon--students"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20m6-8a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7-7.7a4 4 0 0 1 0 7.4m3 8.3v-1.5a3.5 3.5 0 0 0-2.5-3.36" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
-                  <strong id="admin-students-count">0</strong><small>طلاب مسجلون في الهَب</small>
+                  <div class="hub-stat-card__top"><span>Total students</span><span class="hub-stat-icon hub-stat-icon--students"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M16 20v-1.5a3.5 3.5 0 0 0-3.5-3.5h-5A3.5 3.5 0 0 0 4 18.5V20m6-8a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7-7.7a4 4 0 0 1 0 7.4m3 8.3v-1.5a3.5 3.5 0 0 0-2.5-3.36" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+                  <strong id="admin-students-count">0</strong><small>Students registered at the hub</small>
                 </article>
                 <article class="hub-stat-card hub-stat-card--admin">
-                  <div class="hub-stat-card__top"><span>جلسات نشطة الآن</span><span class="hub-stat-icon hub-stat-icon--active"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v4l2.5 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="18.5" cy="5.5" r="2.5" fill="currentColor"/></svg></span></div>
-                  <strong id="admin-active-count">0</strong><small>تُحتسب لحظيًا</small>
+                  <div class="hub-stat-card__top"><span>Active sessions now</span><span class="hub-stat-icon hub-stat-icon--active"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v4l2.5 1.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="18.5" cy="5.5" r="2.5" fill="currentColor"/></svg></span></div>
+                  <strong id="admin-active-count">0</strong><small>Counted live</small>
                 </article>
                 <article class="hub-stat-card hub-stat-card--admin">
-                  <div class="hub-stat-card__top"><span>جلسات مكتملة</span><span class="hub-stat-icon hub-stat-icon--completed"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 12.5 4 4L18.5 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/></svg></span></div>
-                  <strong id="admin-completed-count">0</strong><small>حُفظت في سجل الدراسة</small>
+                  <div class="hub-stat-card__top"><span>Completed sessions</span><span class="hub-stat-icon hub-stat-icon--completed"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 12.5 4 4L18.5 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/></svg></span></div>
+                  <strong id="admin-completed-count">0</strong><small>Saved in the study history</small>
                 </article>
                 <article class="hub-stat-card hub-stat-card--admin">
-                  <div class="hub-stat-card__top"><span>وقت الدراسة الكلي</span><span class="hub-stat-icon hub-stat-icon--time"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span></div>
-                  <strong id="admin-total-time" dir="ltr">00:00:00</strong>
-                  <small id="admin-total-period">إجمالي وقت الطلاب — منذ البداية</small>
-                  <button id="admin-reset-total" type="button" class="hub-button hub-button--secondary hub-reset-counter">تصفير العداد</button>
+                  <div class="hub-stat-card__top"><span>Total study time</span><span class="hub-stat-icon hub-stat-icon--time"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3.5 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span></div>
+                  <strong id="admin-total-time">00:00:00</strong>
+                  <small id="admin-total-period">All student time — since the beginning</small>
+                  <button id="admin-reset-total" type="button" class="hub-button hub-button--secondary hub-reset-counter">Reset counter</button>
                 </article>
               </div>
 
               <section id="admin-counter-archive-panel" class="hub-panel hub-admin-recent-panel hub-hidden">
                 <div class="hub-admin-panel-heading">
-                  <div><p class="hub-admin-kicker">أرشيف الفترات</p><h2>أرشيف عداد الدراسة الشهري</h2></div>
-                  <span class="hub-admin-date">آخر 120 فترة</span>
+                  <div><p class="hub-admin-kicker">Period archive</p><h2>Monthly study counter archive</h2></div>
+                  <span class="hub-admin-date">Last 120 periods</span>
                 </div>
-                <div id="admin-counter-archive" class="hub-table-wrap"><p class="hub-muted">جارٍ تحميل الأرشيف…</p></div>
+                <div id="admin-counter-archive" class="hub-table-wrap"><p class="hub-muted">Loading archive…</p></div>
               </section>
 
-              <div class="hub-admin-main-grid">
+              <div id="admin-main-grid" class="hub-admin-main-grid">
                 <section id="admin-students-panel" class="hub-panel hub-admin-students-panel">
                   <div class="hub-admin-panel-heading">
-                    <div><p class="hub-admin-kicker">دليل الطلاب</p><h2>الطلاب المسجلون</h2></div>
+                    <div><p class="hub-admin-kicker">Student directory</p><h2>Registered students</h2></div>
                     <span id="admin-student-total" class="hub-badge">0</span>
                   </div>
-                  <label class="hub-admin-search-label" for="student-search">ابحث عن طالب</label>
-                  <input id="student-search" class="hub-search hub-search--full" type="search" placeholder="الاسم أو البريد أو الهاتف" aria-label="ابحث بالاسم أو البريد أو الهاتف" />
-                  <div id="admin-students-list" class="hub-student-list"><p class="hub-muted">جارٍ تحميل الطلاب…</p></div>
+                  <label class="hub-admin-search-label" for="student-search">Search for a student</label>
+                  <input id="student-search" class="hub-search hub-search--full" type="search" placeholder="Name, email or phone" aria-label="Search by name, email or phone" />
+                  <div id="admin-students-list" class="hub-student-list"><p class="hub-muted">Loading students…</p></div>
                 </section>
 
                 <section id="admin-messages-panel" class="hub-panel hub-admin-conversation-panel">
                   <div class="hub-admin-panel-heading">
-                    <div><p class="hub-admin-kicker">تواصل مباشر</p><h2>محادثة الطالب</h2></div>
+                    <div><p class="hub-admin-kicker">Direct contact</p><h2>Student conversation</h2></div>
                     <span class="hub-admin-chat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H9l-5 4V5.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span>
                   </div>
                   <div id="admin-selected-student" class="hub-selected-student hub-hidden"></div>
-                  <div id="admin-conversation-empty" class="hub-conversation-empty">اختر طالبًا من القائمة لعرض رسائله وإرسال ملاحظة له.</div>
+                  <div id="admin-conversation-empty" class="hub-conversation-empty">Choose a student from the list to see their messages and send a note.</div>
                   <div id="admin-conversation-list" class="hub-conversation-list"></div>
                   <form id="admin-message-form" class="hub-admin-compose hub-hidden">
-                    <label for="message-body">اكتب رسالة للطالب</label>
-                    <textarea id="message-body" class="hub-textarea" rows="3" maxlength="4000" required></textarea>
+                    <label for="message-body">Write a message to the student</label>
+                    <textarea id="message-body" class="hub-textarea" rows="3" maxlength="4000" required dir="auto"></textarea>
                     <div class="hub-admin-compose-actions">
                       <p id="admin-message-feedback" class="hub-feedback hub-hidden" role="status"></p>
-                      <button type="submit" class="hub-button hub-button--primary">إرسال الرسالة</button>
+                      <button type="submit" class="hub-button hub-button--primary">Send message</button>
                     </div>
                   </form>
                 </section>
@@ -281,19 +309,88 @@
 
               <section class="hub-panel hub-admin-active-panel">
                 <div class="hub-admin-panel-heading">
-                  <div><p class="hub-admin-kicker">إدارة الحضور</p><h2>الجلسات النشطة الآن</h2></div>
-                  <span id="admin-active-count-label" class="hub-badge">0 نشطة</span>
+                  <div><p class="hub-admin-kicker">Attendance</p><h2>Active sessions now</h2></div>
+                  <span id="admin-active-count-label" class="hub-badge">0 active</span>
                 </div>
-                <div id="admin-active-sessions" class="hub-active-session-list"><p class="hub-muted">جارٍ تحميل الجلسات…</p></div>
+                <div id="admin-active-sessions" class="hub-active-session-list"><p class="hub-muted">Loading sessions…</p></div>
               </section>
 
               <section class="hub-panel hub-admin-recent-panel">
                 <div class="hub-admin-panel-heading">
-                  <div><p class="hub-admin-kicker">السجل اليومي</p><h2>آخر الجلسات</h2></div>
-                  <span class="hub-admin-date">أحدث 10 جلسات</span>
+                  <div><p class="hub-admin-kicker">Daily log</p><h2>Recent sessions</h2></div>
+                  <span class="hub-admin-date">Latest 10 sessions</span>
                 </div>
-                <div id="admin-recent-sessions" class="hub-table-wrap"><p class="hub-muted">جارٍ تحميل السجل…</p></div>
+                <div id="admin-recent-sessions" class="hub-table-wrap"><p class="hub-muted">Loading history…</p></div>
               </section>
+
+              <section id="admin-sub-admins-panel" class="hub-panel hub-admin-recent-panel hub-hidden">
+                <div class="hub-admin-panel-heading">
+                  <div><p class="hub-admin-kicker">Team access</p><h2>Sub-admins</h2></div>
+                  <span id="admin-sub-admin-total" class="hub-badge">0</span>
+                </div>
+                <p class="hub-muted hub-sub-admin-note">Sub-admins can sign in and view students, sessions and totals. They cannot read messages or change anything.</p>
+                <form id="sub-admin-form" class="hub-sub-admin-form" novalidate>
+                  <label for="sub-admin-name"><span>Full name</span><input id="sub-admin-name" class="hub-search" name="fullName" type="text" maxlength="160" required autocomplete="off" /></label>
+                  <label for="sub-admin-email"><span>Email</span><input id="sub-admin-email" class="hub-search" name="email" type="email" maxlength="254" required autocomplete="off" /></label>
+                  <label for="sub-admin-password"><span>Password (12+ characters)</span><input id="sub-admin-password" class="hub-search" name="password" type="password" minlength="12" maxlength="72" required autocomplete="new-password" /></label>
+                  <button type="submit" class="hub-button hub-button--primary">Create sub-admin</button>
+                </form>
+                <p id="sub-admin-feedback" class="hub-feedback hub-hidden" role="status"></p>
+                <div id="admin-sub-admins" class="hub-table-wrap"><p class="hub-muted">Loading sub-admins…</p></div>
+              </section>
+              </div>
+
+              <div id="admin-archive-view" class="hub-hidden">
+                <section class="hub-panel hub-archive-panel">
+                  <div class="hub-admin-panel-heading hub-archive-heading">
+                    <div><p class="hub-admin-kicker">Archive</p><h2>Daily activity archive</h2></div>
+                    <label class="hub-archive-period" for="archive-period"><span>Month</span><select id="archive-period" class="hub-select"></select></label>
+                  </div>
+                  <p class="hub-muted hub-archive-intro">Each counter reset moves the completed sessions here. Browse one day at a time.</p>
+                  <div id="archive-empty" class="hub-conversation-empty hub-hidden">Nothing is archived yet. When you reset the counter, completed sessions move to this archive.</div>
+                  <div id="archive-day" class="hub-archive-day hub-hidden">
+                    <div class="hub-archive-day__head">
+                      <div class="hub-archive-day__title">
+                        <p id="archive-weekday" class="hub-archive-weekday"></p>
+                        <h3 id="archive-date"></h3>
+                        <p id="archive-period-label" class="hub-muted"></p>
+                      </div>
+                      <div class="hub-archive-stats">
+                        <div><span>Sessions</span><strong id="archive-session-count">0</strong></div>
+                        <div><span>Students</span><strong id="archive-student-count">0</strong></div>
+                        <div><span>Study time</span><strong id="archive-total-time">00:00:00</strong></div>
+                      </div>
+                    </div>
+                    <div id="archive-sessions" class="hub-table-wrap"></div>
+                  </div>
+                  <div class="hub-archive-nav">
+                    <button id="archive-prev" type="button" class="hub-button hub-button--secondary" disabled>← Previous day</button>
+                    <span id="archive-position" class="hub-archive-position">—</span>
+                    <button id="archive-next" type="button" class="hub-button hub-button--secondary" disabled>Next day →</button>
+                  </div>
+                </section>
+              </div>
+
+              <dialog id="student-edit-dialog" class="hub-dialog" aria-labelledby="student-edit-title">
+                <form id="student-edit-form" class="hub-dialog__form" novalidate>
+                  <div class="hub-dialog__head">
+                    <div><p class="hub-admin-kicker">Owner only</p><h2 id="student-edit-title">Edit student</h2></div>
+                    <button type="button" class="hub-dialog__close" data-dialog-close aria-label="Close">×</button>
+                  </div>
+                  <label for="student-edit-name"><span>Full name</span><input id="student-edit-name" class="hub-search" name="fullName" type="text" maxlength="160" required autocomplete="off" dir="auto" /></label>
+                  <label for="student-edit-email"><span>Email</span><input id="student-edit-email" class="hub-search" name="email" type="email" maxlength="254" required autocomplete="off" /></label>
+                  <label for="student-edit-phone"><span>Phone</span><input id="student-edit-phone" class="hub-search" name="phone" type="tel" maxlength="32" required autocomplete="off" /></label>
+                  <label for="student-edit-password"><span>New password</span><input id="student-edit-password" class="hub-search" name="password" type="password" minlength="8" maxlength="72" autocomplete="new-password" placeholder="Leave empty to keep the current password" /></label>
+                  <p class="hub-muted hub-dialog__hint">Setting a new password signs the student out on every device. Their active study session is kept and resumes when they sign in again.</p>
+                  <p id="student-edit-feedback" class="hub-feedback hub-hidden" role="alert"></p>
+                  <div class="hub-dialog__actions">
+                    <button id="student-delete" type="button" class="hub-button hub-button--logout">Delete student</button>
+                    <span class="hub-dialog__spacer"></span>
+                    <button type="button" class="hub-button hub-button--secondary" data-dialog-close>Cancel</button>
+                    <button type="submit" class="hub-button hub-button--primary">Save changes</button>
+                  </div>
+                </form>
+              </dialog>
             </section>
           </main>
         </div>

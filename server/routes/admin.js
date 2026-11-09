@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireAdmin } from '../auth/admin.js';
+import { ADMIN_ROLES, requireAdmin } from '../auth/admin.js';
 import {
   ADMIN_COOKIE,
   clearCookie,
@@ -16,6 +16,16 @@ import { getStudyCounterOverview, listStudyCounterArchive, resetStudyCounter } f
 
 const ADMIN_SESSION_MS = 8 * 60 * 60 * 1000;
 const ADMIN_MAX_LOGIN_ATTEMPTS = 5;
+const SUB_ADMIN_MIN_PASSWORD_LENGTH = 12;
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const phonePattern = /^\+?[0-9 ()-]{7,32}$/;
+const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+
+// Archive days are calendar days in the hub's own time zone (Khan Younis).
+const HUB_TIME_ZONE = (() => {
+  const zone = process.env.HUB_TIME_ZONE || 'Asia/Gaza';
+  try { new Intl.DateTimeFormat('en', { timeZone: zone }); return zone; } catch { return 'UTC'; }
+})();
 let dummyPasswordHashPromise;
 
 function validId(value) {
@@ -41,7 +51,7 @@ export function createAdminRouter({ pool, requirePublicCsrf, requireSessionCsrf 
   const requireAdminAuth = requireAdmin(pool);
   const requireOwnerAuth = (req, res, next) => {
     if (req.admin?.role !== 'owner') {
-      return res.status(403).json({ error: 'هذه العملية متاحة لمالك المنصة فقط.', code: 'OWNER_REQUIRED' });
+      return res.status(403).json({ error: 'Only the platform owner can do this. Sub-admins have view-only access.', code: 'OWNER_REQUIRED' });
     }
     return next();
   };
@@ -50,7 +60,7 @@ export function createAdminRouter({ pool, requirePublicCsrf, requireSessionCsrf 
     const email = normalizeEmail(req.body?.email);
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
     if (!email || email.length > 254 || !password || Buffer.byteLength(password, 'utf8') > 72) {
-      return res.status(400).json({ error: 'أدخل البريد الإلكتروني وكلمة المرور بصورة صحيحة.', code: 'INVALID_CREDENTIALS' });
+      return res.status(400).json({ error: 'Enter a valid email address and password.', code: 'INVALID_CREDENTIALS' });
     }
 
     const sourceHash = hashOpaqueToken(String(req.ip || req.socket?.remoteAddress || 'unknown'));
@@ -67,25 +77,25 @@ export function createAdminRouter({ pool, requirePublicCsrf, requireSessionCsrf 
           AND attempted_at >= DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 15 MINUTE)
       `, [email, sourceHash]);
       if (Number(attemptRows[0]?.attemptCount || 0) >= ADMIN_MAX_LOGIN_ATTEMPTS) {
-        return res.status(429).json({ error: 'تعذر تسجيل الدخول الآن. انتظر قليلًا ثم حاول مجددًا.', code: 'ADMIN_LOGIN_RATE_LIMITED' });
+        return res.status(429).json({ error: 'Too many sign-in attempts. Wait a few minutes and try again.', code: 'ADMIN_LOGIN_RATE_LIMITED' });
       }
 
       const [adminRows] = await pool.execute(`
         SELECT id, open_id AS openId, email, full_name AS fullName,
                password_hash AS passwordHash, admin_role AS role
         FROM admins
-        WHERE email_normalized = ? AND is_active = TRUE AND admin_role = 'owner'
+        WHERE email_normalized = ? AND is_active = TRUE AND admin_role IN ('owner', 'viewer')
         LIMIT 1
       `, [email]);
       const admin = adminRows[0] || null;
       const comparisonHash = admin?.passwordHash || await getDummyPasswordHash();
       const passwordMatches = await verifyPassword(password, comparisonHash);
-      if (!admin || admin.role !== 'owner' || !admin.passwordHash || !passwordMatches) {
+      if (!admin || !ADMIN_ROLES.includes(admin.role) || !admin.passwordHash || !passwordMatches) {
         await pool.execute(`
           INSERT INTO admin_login_attempts (email_normalized, source_hash, attempted_at)
           VALUES (?, ?, UTC_TIMESTAMP(3))
         `, [email, sourceHash]);
-        return res.status(401).json({ error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة.', code: 'ADMIN_CREDENTIALS_INVALID' });
+        return res.status(401).json({ error: 'The email or password is incorrect.', code: 'ADMIN_CREDENTIALS_INVALID' });
       }
 
       await pool.execute(
@@ -140,14 +150,14 @@ export function createAdminRouter({ pool, requirePublicCsrf, requireSessionCsrf 
     } catch (error) { return next(error); }
   });
 
-  router.get('/study-counter/archive', requireAdminAuth, requireOwnerAuth, async (_req, res, next) => {
+  router.get('/study-counter/archive', requireAdminAuth, async (_req, res, next) => {
     try { return res.json({ archive: await listStudyCounterArchive(pool) }); }
     catch (error) { return next(error); }
   });
 
   router.post('/study-counter/reset', requireAdminAuth, requireOwnerAuth, requireSessionCsrf, async (req, res, next) => {
     if (req.body?.confirmed !== true) {
-      return res.status(400).json({ error: 'يلزم تأكيد بدء فترة احتساب جديدة.', code: 'COUNTER_RESET_CONFIRMATION_REQUIRED' });
+      return res.status(400).json({ error: 'Confirm that you want to start a new counting period.', code: 'COUNTER_RESET_CONFIRMATION_REQUIRED' });
     }
     try { return res.json(await resetStudyCounter(pool, req.admin.id)); }
     catch (error) { return next(error); }
@@ -165,7 +175,7 @@ export function createAdminRouter({ pool, requirePublicCsrf, requireSessionCsrf 
                                  WHEN session.status = 'active' THEN TIMESTAMPDIFF(SECOND, session.started_at, UTC_TIMESTAMP(3))
                                  ELSE 0 END), 0) AS totalSeconds
         FROM students AS student
-        LEFT JOIN study_sessions AS session ON session.student_id = student.id
+        LEFT JOIN study_sessions AS session ON session.student_id = student.id AND session.archived_at IS NULL
         WHERE (? = '' OR student.full_name LIKE ? OR student.email_normalized LIKE ? OR student.phone LIKE ?)
         GROUP BY student.id, student.full_name, student.email, student.phone, student.created_at
         ORDER BY student.full_name ASC LIMIT 500
@@ -195,6 +205,7 @@ export function createAdminRouter({ pool, requirePublicCsrf, requireSessionCsrf 
         FROM study_sessions AS session
         JOIN students AS student ON student.id = session.student_id
         WHERE (? = 'all' OR session.status = ?)
+          AND session.archived_at IS NULL
           AND (? = '' OR session.student_id = NULLIF(?, '')::bigint)
         ORDER BY (session.status = 'active') DESC, session.started_at DESC
         LIMIT 1000
@@ -205,7 +216,7 @@ export function createAdminRouter({ pool, requirePublicCsrf, requireSessionCsrf 
     } catch (error) { return next(error); }
   });
 
-  router.post('/sessions/:id/close', requireAdminAuth, requireSessionCsrf, async (req, res, next) => {
+  router.post('/sessions/:id/close', requireAdminAuth, requireOwnerAuth, requireSessionCsrf, async (req, res, next) => {
     if (!validId(req.params.id)) return res.status(400).json({ error: 'Invalid session id.', code: 'INVALID_SESSION_ID' });
     try {
       const closed = await inTransaction(pool, async (connection) => {
@@ -276,6 +287,181 @@ export function createAdminRouter({ pool, requirePublicCsrf, requireSessionCsrf 
       if (error?.code === 'ER_NO_REFERENCED_ROW_2') return res.status(404).json({ error: 'Student not found.', code: 'STUDENT_NOT_FOUND' });
       return next(error);
     }
+  });
+
+  // ---- Daily activity archive (read-only; sub-admins may view it) ----
+  router.get('/archive/days', requireAdminAuth, async (_req, res, next) => {
+    try {
+      const [rows] = await pool.execute(`
+        SELECT to_char(session.started_at AT TIME ZONE ?, 'YYYY-MM-DD') AS day,
+               MAX(session.archive_period_id) AS periodId,
+               COUNT(*) AS sessionCount,
+               COUNT(DISTINCT session.student_id) AS studentCount,
+               COALESCE(SUM(session.duration_seconds), 0) AS totalSeconds
+        FROM study_sessions AS session
+        WHERE session.archived_at IS NOT NULL
+        GROUP BY 1
+        ORDER BY 1 ASC
+        LIMIT 5000
+      `, [HUB_TIME_ZONE]);
+      return res.json({
+        timeZone: HUB_TIME_ZONE,
+        days: rows.map((row) => ({
+          day: row.day,
+          periodId: row.periodId == null ? null : String(row.periodId),
+          sessionCount: Number(row.sessionCount || 0),
+          studentCount: Number(row.studentCount || 0),
+          totalSeconds: Number(row.totalSeconds || 0),
+        })),
+      });
+    } catch (error) { return next(error); }
+  });
+
+  router.get('/archive/days/:day', requireAdminAuth, async (req, res, next) => {
+    const day = String(req.params.day || '');
+    if (!datePattern.test(day) || Number.isNaN(Date.parse(`${day}T00:00:00Z`))) {
+      return res.status(400).json({ error: 'Choose a valid day (YYYY-MM-DD).', code: 'INVALID_DAY' });
+    }
+    try {
+      const [rows] = await pool.execute(`
+        SELECT session.id, session.student_id AS studentId,
+               student.full_name AS studentName, student.email,
+               DATE_FORMAT(session.started_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS startedAt,
+               DATE_FORMAT(session.ended_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS endedAt,
+               session.duration_seconds AS durationSeconds
+        FROM study_sessions AS session
+        JOIN students AS student ON student.id = session.student_id
+        WHERE session.archived_at IS NOT NULL
+          AND to_char(session.started_at AT TIME ZONE ?, 'YYYY-MM-DD') = ?
+        ORDER BY session.started_at ASC
+        LIMIT 2000
+      `, [HUB_TIME_ZONE, day]);
+      return res.json({
+        day, timeZone: HUB_TIME_ZONE,
+        sessions: rows.map((row) => ({
+          ...row, id: String(row.id), studentId: String(row.studentId), durationSeconds: Number(row.durationSeconds || 0),
+        })),
+      });
+    } catch (error) { return next(error); }
+  });
+
+  // ---- Student account management (owner only) ----
+  router.patch('/students/:id', requireAdminAuth, requireOwnerAuth, requireSessionCsrf, async (req, res, next) => {
+    if (!validId(req.params.id)) return res.status(400).json({ error: 'Invalid student id.', code: 'INVALID_STUDENT_ID' });
+    const fullName = typeof req.body?.fullName === 'string' ? req.body.fullName.trim() : '';
+    const email = normalizeEmail(req.body?.email);
+    const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    if (fullName.length < 2 || fullName.length > 160) return res.status(400).json({ error: 'Enter the student\'s full name.', code: 'INVALID_NAME' });
+    if (!emailPattern.test(email) || email.length > 254) return res.status(400).json({ error: 'Enter a valid email address.', code: 'INVALID_EMAIL' });
+    if (!phonePattern.test(phone)) return res.status(400).json({ error: 'Enter a valid phone number.', code: 'INVALID_PHONE' });
+    const passwordBytes = Buffer.byteLength(password, 'utf8');
+    if (password && (passwordBytes < 8 || passwordBytes > 72)) {
+      return res.status(400).json({ error: 'Use a password between 8 and 72 bytes, or leave it empty to keep the current one.', code: 'INVALID_PASSWORD' });
+    }
+    try {
+      const passwordHash = password ? await hashPassword(password) : null;
+      const updated = await inTransaction(pool, async (connection) => {
+        const [result] = await connection.execute(`
+          UPDATE students
+          SET full_name = ?, email = ?, email_normalized = ?, phone = ?, updated_at = UTC_TIMESTAMP(3)
+          WHERE id = ?
+        `, [fullName, email, email, phone, req.params.id]);
+        if (!result.affectedRows) return false;
+        if (passwordHash) {
+          await connection.execute('UPDATE students SET password_hash = ? WHERE id = ?', [passwordHash, req.params.id]);
+          // A new password signs the student out everywhere. Their study
+          // session stays active and is resumed when they sign in again.
+          await connection.execute('DELETE FROM student_auth_sessions WHERE student_id = ?', [req.params.id]);
+        }
+        return true;
+      });
+      if (!updated) return res.status(404).json({ error: 'Student not found.', code: 'STUDENT_NOT_FOUND' });
+      return res.json({
+        student: { id: req.params.id, fullName, email, phone },
+        passwordChanged: Boolean(passwordHash),
+      });
+    } catch (error) {
+      if (error?.code === 'ER_DUP_ENTRY') {
+        return res.status(409).json({ error: 'Another student already uses this email.', code: 'EMAIL_EXISTS' });
+      }
+      return next(error);
+    }
+  });
+
+  router.delete('/students/:id', requireAdminAuth, requireOwnerAuth, requireSessionCsrf, async (req, res, next) => {
+    if (!validId(req.params.id)) return res.status(400).json({ error: 'Invalid student id.', code: 'INVALID_STUDENT_ID' });
+    try {
+      // Study sessions, sign-ins and messages are removed with the student (ON DELETE CASCADE).
+      const [result] = await pool.execute('DELETE FROM students WHERE id = ?', [req.params.id]);
+      if (!result.affectedRows) return res.status(404).json({ error: 'Student not found.', code: 'STUDENT_NOT_FOUND' });
+      return res.json({ ok: true, id: req.params.id });
+    } catch (error) { return next(error); }
+  });
+
+  router.get('/sub-admins', requireAdminAuth, requireOwnerAuth, async (_req, res, next) => {
+    try {
+      const [rows] = await pool.query(`
+        SELECT id, full_name AS fullName, email,
+               DATE_FORMAT(created_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS createdAt,
+               DATE_FORMAT(last_login_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS lastLoginAt
+        FROM admins
+        WHERE admin_role = 'viewer'
+        ORDER BY created_at DESC
+        LIMIT 200
+      `);
+      return res.json({ subAdmins: rows.map((row) => ({ ...row, id: String(row.id), role: 'viewer' })) });
+    } catch (error) { return next(error); }
+  });
+
+  router.post('/sub-admins', requireAdminAuth, requireOwnerAuth, requireSessionCsrf, async (req, res, next) => {
+    const fullName = typeof req.body?.fullName === 'string' ? req.body.fullName.trim() : '';
+    const email = normalizeEmail(req.body?.email);
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    if (fullName.length < 2 || fullName.length > 160) {
+      return res.status(400).json({ error: 'Enter the sub-admin\'s full name.', code: 'INVALID_NAME' });
+    }
+    if (!emailPattern.test(email) || email.length > 254) {
+      return res.status(400).json({ error: 'Enter a valid email address.', code: 'INVALID_EMAIL' });
+    }
+    if (Array.from(password).length < SUB_ADMIN_MIN_PASSWORD_LENGTH || Buffer.byteLength(password, 'utf8') > 72) {
+      return res.status(400).json({
+        error: `Use a password of at least ${SUB_ADMIN_MIN_PASSWORD_LENGTH} characters (72 bytes maximum).`,
+        code: 'INVALID_PASSWORD',
+      });
+    }
+    try {
+      const passwordHash = await hashPassword(password);
+      const [result] = await pool.execute(`
+        INSERT INTO admins (
+          open_id, email, email_normalized, full_name, password_hash,
+          admin_role, is_active, created_at, last_login_at, created_by_admin_id
+        )
+        VALUES (?, ?, ?, ?, ?, 'viewer', TRUE, UTC_TIMESTAMP(3), NULL, ?)
+      `, [`local:${randomToken(24)}`, email, email, fullName, passwordHash, req.admin.id]);
+      return res.status(201).json({
+        subAdmin: { id: String(result.insertId), fullName, email, role: 'viewer', lastLoginAt: null },
+      });
+    } catch (error) {
+      if (error?.code === 'ER_DUP_ENTRY') {
+        return res.status(409).json({ error: 'An administrator with this email already exists.', code: 'ADMIN_EMAIL_EXISTS' });
+      }
+      return next(error);
+    }
+  });
+
+  router.delete('/sub-admins/:id', requireAdminAuth, requireOwnerAuth, requireSessionCsrf, async (req, res, next) => {
+    if (!validId(req.params.id)) return res.status(400).json({ error: 'Invalid sub-admin id.', code: 'INVALID_ADMIN_ID' });
+    try {
+      // Only viewer accounts can be removed; their sign-in sessions cascade away,
+      // so a removed sub-admin is signed out on their next request.
+      const [result] = await pool.execute(
+        "DELETE FROM admins WHERE id = ? AND admin_role = 'viewer'",
+        [req.params.id],
+      );
+      if (!result.affectedRows) return res.status(404).json({ error: 'Sub-admin not found.', code: 'SUB_ADMIN_NOT_FOUND' });
+      return res.json({ ok: true, id: req.params.id });
+    } catch (error) { return next(error); }
   });
 
   return router;

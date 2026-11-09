@@ -67,7 +67,7 @@ export async function bootstrapOwnerAccount(pool) {
         admin_role, is_active, created_at, last_login_at
       )
       VALUES (?, ?, ?, ?, ?, 'owner', TRUE, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3))
-    `, [`local:${randomToken(24)}`, email, email, 'مالك منصة الميدكال هب', passwordHash]);
+    `, [`local:${randomToken(24)}`, email, email, 'Medical Hub Owner', passwordHash]);
     if (result.affectedRows !== 1) throw bootstrapError('OWNER_INITIALIZATION_NOT_SAVED');
     return { created: true, reusedAccount: false };
   } finally {
@@ -83,10 +83,12 @@ export async function bootstrapOwnerAccount(pool) {
   }
 }
 
+export const ADMIN_ROLES = Object.freeze(['owner', 'viewer']);
+
 export function requireAdmin(pool) {
   return async function adminAuthentication(req, res, next) {
     const token = getCookie(req, ADMIN_COOKIE);
-    if (!token) return res.status(401).json({ error: 'يلزم تسجيل دخول الإدارة للمتابعة.', code: 'ADMIN_LOGIN_REQUIRED' });
+    if (!token) return res.status(401).json({ error: 'Please sign in as an administrator to continue.', code: 'ADMIN_LOGIN_REQUIRED' });
 
     try {
       const tokenHash = hashOpaqueToken(token);
@@ -99,12 +101,12 @@ export function requireAdmin(pool) {
         JOIN admins AS admin ON admin.id = auth.admin_id
         WHERE auth.token_hash = ?
           AND auth.expires_at > UTC_TIMESTAMP(3)
-          AND admin.is_active = TRUE AND admin.admin_role = 'owner'
+          AND admin.is_active = TRUE AND admin.admin_role IN ('owner', 'viewer')
         LIMIT 1
       `, [tokenHash]);
-      if (!rows.length || rows[0].role !== 'owner') {
+      if (!rows.length || !ADMIN_ROLES.includes(rows[0].role)) {
         clearCookie(res, ADMIN_COOKIE);
-        return res.status(401).json({ error: 'انتهت جلسة الإدارة. سجّل الدخول مجددًا.', code: 'ADMIN_SESSION_EXPIRED' });
+        return res.status(401).json({ error: 'Your administrator session has ended. Please sign in again.', code: 'ADMIN_SESSION_EXPIRED' });
       }
       req.admin = rows[0];
       return next();
