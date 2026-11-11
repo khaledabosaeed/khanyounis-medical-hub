@@ -1,24 +1,21 @@
 import { inTransaction } from './db/transaction.js';
-import { toIsoUtc } from './time.js';
+import { hubDay, sessionSecondsSql, toIsoUtc } from './time.js';
 
+// The counter covers every session that has not been moved to the archive yet.
+// A session that was still running at the last reset keeps going, but the
+// seconds it had before the reset (previous_period_seconds) were already
+// counted by the earlier period.
 export async function getStudyCounterOverview(pool) {
   const [[row]] = await pool.query(`
     SELECT
-      COALESCE(SUM(session.status = 'active'), 0) AS activeCount,
-      COALESCE(SUM(session.status = 'completed'
-        AND (counter.reset_at IS NULL OR session.ended_at >= counter.reset_at)), 0) AS completedCount,
-      COALESCE(SUM(CASE
-        WHEN session.id IS NULL THEN 0
-        WHEN counter.reset_at IS NULL AND session.status = 'completed' THEN session.duration_seconds
-        WHEN counter.reset_at IS NULL THEN GREATEST(0, TIMESTAMPDIFF(SECOND, session.started_at, UTC_TIMESTAMP(3)))
-        ELSE GREATEST(0, TIMESTAMPDIFF(SECOND,
-          GREATEST(session.started_at, counter.reset_at),
-          LEAST(COALESCE(session.ended_at, UTC_TIMESTAMP(3)), UTC_TIMESTAMP(3))))
-      END), 0) AS totalSeconds,
+      COALESCE(SUM(CASE WHEN session.status = 'active' THEN 1 ELSE 0 END), 0) AS activeCount,
+      COALESCE(SUM(CASE WHEN session.status = 'completed' THEN 1 ELSE 0 END), 0) AS completedCount,
+      COALESCE(SUM(CASE WHEN session.id IS NULL THEN 0
+        ELSE GREATEST(0, ${sessionSecondsSql()} - session.previous_period_seconds) END), 0) AS totalSeconds,
       MAX(counter.reset_at) AS resetAt,
       MAX(counter.reset_version) AS counterVersion
     FROM admin_study_counter AS counter
-    LEFT JOIN study_sessions AS session ON 1 = 1
+    LEFT JOIN study_sessions AS session ON session.archived_at IS NULL
     WHERE counter.id = 1
   `);
   return {
@@ -30,21 +27,47 @@ export async function getStudyCounterOverview(pool) {
   };
 }
 
+// Archived counter periods, newest first. Each one is normally a month: the
+// owner resets the counter at the start of every month.
 export async function listStudyCounterArchive(pool) {
   const [rows] = await pool.query(`
-    SELECT id, period_started_at AS periodStartedAt, period_ended_at AS periodEndedAt,
-           completed_session_count AS completedSessionCount, total_seconds AS totalSeconds
-    FROM admin_study_counter_archive
-    ORDER BY period_ended_at DESC
+    SELECT period.id, period.period_started_at AS periodStartedAt, period.period_ended_at AS periodEndedAt,
+           period.completed_session_count AS completedSessionCount, period.total_seconds AS totalSeconds,
+           (SELECT MIN(session.started_at) FROM study_sessions AS session
+            WHERE session.archive_period_id = period.id) AS firstSessionAt,
+           (SELECT MAX(session.started_at) FROM study_sessions AS session
+            WHERE session.archive_period_id = period.id) AS lastSessionAt
+    FROM admin_study_counter_archive AS period
+    ORDER BY period.period_ended_at DESC
     LIMIT 120
   `);
-  return rows.map((row) => ({
-    id: String(row.id),
-    periodStartedAt: toIsoUtc(row.periodStartedAt),
-    periodEndedAt: toIsoUtc(row.periodEndedAt),
-    completedSessionCount: Number(row.completedSessionCount || 0),
-    totalSeconds: Number(row.totalSeconds || 0),
-  }));
+  return rows.map((row) => {
+    const periodStartedAt = toIsoUtc(row.periodStartedAt);
+    const periodEndedAt = toIsoUtc(row.periodEndedAt);
+    const sessionCount = Number(row.completedSessionCount || 0);
+    const startDay = hubDay(periodStartedAt);
+    // A reset just after midnight on the 1st closes the previous month: the
+    // reset day only belongs to it if some of its sessions started that day.
+    const resetDay = hubDay(periodEndedAt);
+    const lastDay = hubDay(toIsoUtc(row.lastSessionAt));
+    let endDay = lastDay === resetDay ? resetDay : previousDay(resetDay);
+    if (startDay && endDay < startDay) endDay = startDay;
+    return {
+      id: String(row.id),
+      periodStartedAt,
+      periodEndedAt,
+      startDay,
+      endDay,
+      firstDay: hubDay(toIsoUtc(row.firstSessionAt)),
+      completedSessionCount: sessionCount,
+      sessionCount,
+      totalSeconds: Number(row.totalSeconds || 0),
+    };
+  });
+}
+
+function previousDay(day) {
+  return new Date(Date.parse(`${day}T12:00:00Z`) - 86400000).toISOString().slice(0, 10);
 }
 
 export async function resetStudyCounter(pool, adminId) {
@@ -57,20 +80,16 @@ export async function resetStudyCounter(pool, adminId) {
       FROM admin_study_counter WHERE id = 1
     `);
 
+    // CURRENT_TIMESTAMP is fixed for the whole transaction, so this is the
+    // same instant as resetNow.
+    const secondsNow = sessionSecondsSql('session', 'CURRENT_TIMESTAMP(3)');
     const [[period]] = await connection.execute(`
       SELECT
-        COALESCE(SUM(session.status = 'completed'
-          AND (?::timestamptz IS NULL OR session.ended_at >= ?::timestamptz)), 0) AS completedCount,
-        COALESCE(SUM(CASE
-          WHEN ?::timestamptz IS NULL AND session.status = 'completed' THEN session.duration_seconds
-          WHEN ?::timestamptz IS NULL THEN GREATEST(0, TIMESTAMPDIFF(SECOND, session.started_at, ?::timestamptz))
-          ELSE GREATEST(0, TIMESTAMPDIFF(SECOND,
-            GREATEST(session.started_at, ?::timestamptz),
-            LEAST(COALESCE(session.ended_at, ?::timestamptz), ?::timestamptz)))
-        END), 0) AS totalSeconds
+        COALESCE(SUM(CASE WHEN session.status = 'completed' THEN 1 ELSE 0 END), 0) AS completedCount,
+        COALESCE(SUM(GREATEST(0, ${secondsNow} - session.previous_period_seconds)), 0) AS totalSeconds
       FROM study_sessions AS session
-    `, [counter.resetAt, counter.resetAt, counter.resetAt, counter.resetAt, counter.resetNow,
-      counter.resetAt, counter.resetNow, counter.resetNow]);
+      WHERE session.archived_at IS NULL
+    `);
 
     const [archived] = await connection.execute(`
       INSERT INTO admin_study_counter_archive
@@ -78,8 +97,16 @@ export async function resetStudyCounter(pool, adminId) {
       VALUES (?, ?, ?, ?, ?)
     `, [counter.resetAt, counter.resetNow, Number(period.completedCount || 0), Number(period.totalSeconds || 0), adminId]);
 
+    // Running sessions stay live; the time they already have belongs to the
+    // period that just closed.
+    await connection.execute(`
+      UPDATE study_sessions AS session
+      SET previous_period_seconds = ${secondsNow}
+      WHERE session.status = 'active' AND session.archived_at IS NULL
+    `);
+
     // Move every completed session into this archive period. Active sessions
-    // stay live and are archived by a later reset once they have ended.
+    // are archived by a later reset once they have ended.
     const [moved] = await connection.execute(`
       UPDATE study_sessions
       SET archived_at = ?, archive_period_id = ?
@@ -102,6 +129,8 @@ export async function resetStudyCounter(pool, adminId) {
       totalSeconds: 0,
       completedSessionCount: 0,
       archivedSessionCount: Number(moved.affectedRows || 0),
+      archivedSessionSeconds: Number(period.totalSeconds || 0),
+      archivedPeriodSessionCount: Number(period.completedCount || 0),
       activeSessionCount: Number(updated.activeCount || 0),
       counterResetAt: toIsoUtc(updated.resetAt),
       counterVersion: Number(updated.counterVersion),

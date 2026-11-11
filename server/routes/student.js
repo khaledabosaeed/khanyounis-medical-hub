@@ -3,6 +3,7 @@ import { inTransaction } from '../db/transaction.js';
 import { requireStudent } from '../auth/student.js';
 import { normalizeEmail, hashPassword, verifyPassword, randomToken, hashOpaqueToken, setCookie, clearCookie, STUDENT_COOKIE } from '../security.js';
 import { STUDENT_SESSION_SECONDS } from '../auth/student.js';
+import { HUB_TIME_ZONE, sessionSecondsSql, timerStartedAt } from '../time.js';
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phonePattern = /^\+?[0-9 ()-]{7,32}$/;
 
@@ -30,11 +31,15 @@ function validateRegistration(body = {}) {
   return { fullName, email, phone, password };
 }
 
-// Links a new sign-in to the student's study session. If the student already
-// has an active study session (for example after their sign-in was lost or
-// they signed in on another device), that session is resumed instead of a
-// second one being started. The student row is locked so two simultaneous
-// logins cannot both create a session.
+// Links a new sign-in to the student's study session for today. A student has
+// one study session per day (in the hub's time zone):
+//   1. a session that is still running is resumed (sign-in lost, other device);
+//   2. otherwise today's session, if they signed out earlier today, is reopened
+//      and keeps counting from where it stopped (the time signed out is not
+//      counted);
+//   3. otherwise a new session starts.
+// Sessions already moved to the archive by a counter reset are never reopened.
+// The student row is locked so two simultaneous logins cannot both create one.
 async function attachStudyAndAuthSession(connection, studentId, tokenHash, csrfToken) {
   await connection.execute('SELECT id FROM students WHERE id = ? FOR UPDATE', [studentId]);
   const [activeRows] = await connection.execute(`
@@ -44,11 +49,28 @@ async function attachStudyAndAuthSession(connection, studentId, tokenHash, csrfT
     LIMIT 1
   `, [studentId]);
   let studySessionId = activeRows[0]?.id == null ? null : String(activeRows[0].id);
+  if (studySessionId === null) {
+    const [todayRows] = await connection.execute(`
+      SELECT id FROM study_sessions
+      WHERE student_id = ? AND status = 'completed' AND archived_at IS NULL
+        AND (started_at AT TIME ZONE ?)::date = (CURRENT_TIMESTAMP AT TIME ZONE ?)::date
+      ORDER BY started_at DESC
+      LIMIT 1
+    `, [studentId, HUB_TIME_ZONE, HUB_TIME_ZONE]);
+    if (todayRows[0]?.id != null) {
+      const [reopened] = await connection.execute(`
+        UPDATE study_sessions
+        SET status = 'active', ended_at = NULL, segment_started_at = UTC_TIMESTAMP(3)
+        WHERE id = ? AND student_id = ? AND status = 'completed' AND archived_at IS NULL
+      `, [todayRows[0].id, studentId]);
+      if (reopened.affectedRows) studySessionId = String(todayRows[0].id);
+    }
+  }
   const resumed = studySessionId !== null;
   if (!resumed) {
     const [sessionResult] = await connection.execute(`
-      INSERT INTO study_sessions (student_id, started_at, status, created_at)
-      VALUES (?, UTC_TIMESTAMP(3), 'active', UTC_TIMESTAMP(3))
+      INSERT INTO study_sessions (student_id, started_at, segment_started_at, status, created_at)
+      VALUES (?, UTC_TIMESTAMP(3), UTC_TIMESTAMP(3), 'active', UTC_TIMESTAMP(3))
     `, [studentId]);
     studySessionId = String(sessionResult.insertId);
   }
@@ -59,10 +81,20 @@ async function attachStudyAndAuthSession(connection, studentId, tokenHash, csrfT
   `, [tokenHash, studentId, studySessionId, csrfToken, STUDENT_SESSION_SECONDS]);
   const [rows] = await connection.execute(`
     SELECT id, DATE_FORMAT(started_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS startedAt,
+           DATE_FORMAT(segment_started_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS segmentStartedAt,
            status, duration_seconds AS durationSeconds
     FROM study_sessions WHERE id = ? AND student_id = ? LIMIT 1
   `, [studySessionId, studentId]);
-  return { ...rows[0], id: String(rows[0]?.id ?? studySessionId), resumed };
+  return { ...publicSession(rows[0] || { status: 'active' }), id: String(rows[0]?.id ?? studySessionId), resumed };
+}
+
+function publicSession(row) {
+  const session = {
+    id: String(row.id), startedAt: row.startedAt, endedAt: row.endedAt ?? null,
+    status: row.status, durationSeconds: Number(row.durationSeconds || 0),
+  };
+  session.timerStartedAt = timerStartedAt({ ...session, segmentStartedAt: row.segmentStartedAt });
+  return session;
 }
 
 async function beginStudentSession(pool, studentId) {
@@ -141,26 +173,21 @@ export function createStudentRouter({ pool, requirePublicCsrf, requireSessionCsr
       const [sessionRows] = await pool.execute(`
         SELECT id, DATE_FORMAT(started_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS startedAt,
                DATE_FORMAT(ended_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS endedAt,
+               DATE_FORMAT(segment_started_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS segmentStartedAt,
                status, duration_seconds AS durationSeconds
         FROM study_sessions
         WHERE student_id = ? AND status = 'active'
         ORDER BY started_at DESC
       `, [req.student.id]);
       const [totals] = await pool.execute(`
-        SELECT COALESCE(SUM(CASE
-          WHEN status = 'completed' THEN duration_seconds
-          ELSE TIMESTAMPDIFF(SECOND, started_at, UTC_TIMESTAMP(3))
-        END), 0) AS totalSeconds
+        SELECT COALESCE(SUM(${sessionSecondsSql('')}), 0) AS totalSeconds
         FROM study_sessions WHERE student_id = ?
       `, [req.student.id]);
       const [unread] = await pool.execute(
         "SELECT COUNT(*) AS unreadCount FROM messages WHERE student_id = ? AND sender_role = 'admin' AND read_at IS NULL",
         [req.student.id],
       );
-      const activeSessions = sessionRows.map((row) => ({
-        id: String(row.id), startedAt: row.startedAt, endedAt: row.endedAt,
-        status: row.status, durationSeconds: Number(row.durationSeconds || 0),
-      }));
+      const activeSessions = sessionRows.map(publicSession);
       const currentId = req.student.currentStudySessionId == null ? null : String(req.student.currentStudySessionId);
       const currentSession = activeSessions.find((session) => session.id === currentId) || activeSessions[0] || null;
       return res.json({
@@ -200,10 +227,11 @@ export function createStudentRouter({ pool, requirePublicCsrf, requireSessionCsr
       const [rows] = await pool.execute(`
         SELECT id, DATE_FORMAT(started_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS startedAt,
                DATE_FORMAT(ended_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS endedAt,
+               DATE_FORMAT(segment_started_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS segmentStartedAt,
                status, duration_seconds AS durationSeconds
         FROM study_sessions WHERE student_id = ? ORDER BY started_at DESC LIMIT 250
       `, [req.student.id]);
-      return res.json({ sessions: rows.map((row) => ({ ...row, id: String(row.id), durationSeconds: Number(row.durationSeconds || 0) })) });
+      return res.json({ sessions: rows.map(publicSession) });
     } catch (error) { return next(error); }
   });
 
@@ -214,7 +242,7 @@ export function createStudentRouter({ pool, requirePublicCsrf, requireSessionCsr
           await connection.execute(`
             UPDATE study_sessions
             SET ended_at = UTC_TIMESTAMP(3),
-                duration_seconds = GREATEST(0, TIMESTAMPDIFF(SECOND, started_at, UTC_TIMESTAMP(3))),
+                duration_seconds = ${sessionSecondsSql('')},
                 status = 'completed'
             WHERE id = ? AND student_id = ? AND status = 'active'
           `, [req.student.currentStudySessionId, req.student.id]);

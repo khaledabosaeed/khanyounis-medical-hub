@@ -14,7 +14,7 @@
     adminCounterVersion: 0, adminCounterResetting: false,
     studentMessages: [], studentReadInFlight: false, notifyShown: { student: 0, admin: 0 }, resumedSession: false,
     adminRefreshAttempted: new Set(), adminPage: '/admin',
-    archive: { days: [], periods: new Map(), index: -1, timeZone: 'UTC', requestId: 0 }, editingStudentId: '',
+    archive: { days: new Map(), periods: [], periodId: '', day: '', firstDay: '', today: '', timeZone: 'UTC', requestId: 0, loaded: false }, editingStudentId: '',
   };
   const STUDENT_TITLE = 'Student workspace | Medical Hub';
   const ADMIN_TITLE = 'Admin dashboard | Medical Hub';
@@ -99,6 +99,27 @@
     return `${hours}:${minutes}:${remainder}`;
   }
 
+  // "12 h 05 min": month and day totals are read as hours of study.
+  function studyHours(seconds) {
+    const safe = Math.max(0, Math.floor(Number(seconds) || 0));
+    return `${Math.floor(safe / 3600)} h ${String(Math.floor((safe % 3600) / 60)).padStart(2, '0')} min`;
+  }
+
+  // Calendar days are 'YYYY-MM-DD' strings in the hub's time zone; the
+  // arithmetic below runs in UTC so it never shifts by a day.
+  function dayDate(day) { return new Date(`${day}T12:00:00Z`); }
+  function addDays(day, amount) { return new Date(dayDate(day).getTime() + amount * 86400000).toISOString().slice(0, 10); }
+
+  // A counter period is named after the month it mostly covers (the owner
+  // resets the counter at the start of each month).
+  function periodMonthName(period) {
+    const start = period.startDay || period.firstDay || period.endDay;
+    const end = period.endDay || start;
+    if (!start) return 'Earlier activity';
+    const middle = new Date((dayDate(start).getTime() + dayDate(end).getTime()) / 2);
+    return new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(middle);
+  }
+
   function dateText(value) {
     if (!value) return '—';
     const date = new Date(value);
@@ -113,9 +134,12 @@
     return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(date);
   }
 
+  // `timerStartedAt` already accounts for a session that was paused (signed
+  // out) and resumed later the same day.
   function activeDuration(session, now = Date.now()) {
-    if (!session?.startedAt) return Number(session?.durationSeconds) || 0;
-    const started = new Date(session.startedAt).getTime();
+    const startedAt = session?.timerStartedAt || session?.startedAt;
+    if (!startedAt) return Number(session?.durationSeconds) || 0;
+    const started = new Date(startedAt).getTime();
     if (!Number.isFinite(started)) return Number(session.durationSeconds) || 0;
     return Math.max(0, Math.floor((now - started) / 1000));
   }
@@ -478,7 +502,7 @@
       const data = await api('/api/student/me');
       renderStudentSnapshot(data);
       if (state.resumedSession && data.currentSession) {
-        $('#session-started').textContent += ' · Welcome back — your active session was resumed.';
+        $('#session-started').textContent += ' · Welcome back — today\'s session continues where you left off.';
       }
       state.resumedSession = false;
       const [sessions, messages] = await Promise.all([
@@ -656,14 +680,17 @@
   function renderAdminArchive(archive) {
     const container = $('#admin-counter-archive');
     if (!archive.length) return emptyMessage(container, 'No archived periods yet.');
-    const tableElement = table(['Period', 'Period end', 'Completed sessions', 'Study time']);
+    const tableElement = table(['Month', 'Period', 'Sessions', 'Study hours']);
     const body = $('tbody', tableElement);
     for (const item of archive) {
       const row = document.createElement('tr');
-      cell(row, item.periodStartedAt ? `${adminDateText(item.periodStartedAt)} —` : 'Since the beginning');
-      cell(row, adminDateText(item.periodEndedAt));
+      const month = cell(row, '');
+      const name = document.createElement('strong');
+      name.textContent = periodMonthName(item);
+      month.append(name);
+      cell(row, `${item.periodStartedAt ? adminDateText(item.periodStartedAt) : 'Since the beginning'} – ${adminDateText(item.periodEndedAt)}`);
       cell(row, item.completedSessionCount);
-      cell(row, hms(item.totalSeconds));
+      cell(row, studyHours(item.totalSeconds));
       body.append(row);
     }
     container.replaceChildren(tableElement);
@@ -682,7 +709,8 @@
       renderAdminCounter(result);
       $('#admin-completed-count').textContent = String(result.completedSessionCount || 0);
       const moved = Number(result.archivedSessionCount || 0);
-      const message = `The counter was reset and a new period has started. ${moved} completed session${moved === 1 ? ' was' : 's were'} moved to the daily archive.`;
+      const closed = Number(result.archivedPeriodSessionCount ?? moved);
+      const message = `The counter was reset and a new period has started. The closed period had ${closed} session${closed === 1 ? '' : 's'} and ${studyHours(result.archivedSessionSeconds || 0)} of study; ${moved} completed session${moved === 1 ? ' was' : 's were'} moved to the archive.`;
       showAdminStatus(message);
       // Archived sessions leave the lists; refresh them without blocking the button.
       void refreshAdminSnapshot();
@@ -909,7 +937,7 @@
         const durationLabel = document.createElement('small');
         durationLabel.textContent = 'Session time';
         const timer = document.createElement('strong');
-        timer.dataset.adminSessionStarted = session.startedAt || '';
+        timer.dataset.adminSessionStarted = session.timerStartedAt || session.startedAt || '';
         timer.textContent = hms(activeDuration(session));
         duration.append(durationLabel, timer);
         item.append(identity, duration);
@@ -963,7 +991,7 @@
       cell(row, adminDateText(session.endedAt));
       const duration = cell(row, '');
       if (session.status === 'active') {
-        duration.dataset.adminSessionStarted = session.startedAt || '';
+        duration.dataset.adminSessionStarted = session.timerStartedAt || session.startedAt || '';
         duration.textContent = hms(activeDuration(session));
       } else duration.textContent = hms(session.durationSeconds);
       if (owner) {
@@ -1249,89 +1277,159 @@
     if (link.dataset.adminPage !== state.adminPage) navigate(link.dataset.adminPage);
   });
 
-  // ---- Daily activity archive: one day at a time ----
-  function archiveDayDate(day) { return new Date(`${day}T12:00:00Z`); }
+  // ---- Daily activity archive: months (counter periods) and their days ----
+  const archiveRangeFormat = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
-  function archivePeriodLabel(period) {
-    if (!period) return 'Earlier activity';
-    const format = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-    const start = period.periodStartedAt ? format.format(new Date(period.periodStartedAt)) : 'Beginning';
-    return `${start} – ${format.format(new Date(period.periodEndedAt))}`;
+  function archivePeriodRange(period) {
+    return `${archiveRangeFormat.format(dayDate(period.startDay))} – ${archiveRangeFormat.format(dayDate(period.endDay))}`;
+  }
+
+  function archivePeriodContains(period, day) {
+    return Boolean(period) && day >= period.startDay && day <= period.endDay;
+  }
+
+  function archivePeriodFor(day) {
+    const archive = state.archive;
+    const selected = archive.periods.find((period) => period.id === archive.periodId);
+    if (archivePeriodContains(selected, day)) return selected;
+    return archive.periods.find((period) => archivePeriodContains(period, day)) || selected || archive.periods[0];
+  }
+
+  // Most recent day with activity in a period, or its last day.
+  function archiveLatestDay(period) {
+    for (let day = period.endDay; day >= period.startDay; day = addDays(day, -1)) {
+      if (state.archive.days.has(day)) return day;
+    }
+    return period.endDay;
   }
 
   async function loadArchivePage() {
     try {
-      const [daysResult, periodsResult] = await Promise.all([
-        api('/api/admin/archive/days'), api('/api/admin/study-counter/archive'),
-      ]);
+      const result = await api('/api/admin/archive/days');
       const archive = state.archive;
-      archive.days = daysResult.days || [];
-      archive.timeZone = daysResult.timeZone || 'UTC';
-      archive.periods = new Map((periodsResult.archive || []).map((period) => [period.id, period]));
+      archive.days = new Map((result.days || []).map((day) => [day.day, day]));
+      archive.timeZone = result.timeZone || 'UTC';
+      archive.today = result.today;
+      archive.firstDay = result.firstDay || result.today;
+      archive.periods = (result.periods || [])
+        .filter((period) => period.startDay && period.endDay)
+        .map((period) => ({ ...period, name: periodMonthName(period) }));
+      archive.loaded = true;
+      archive.periodId = '';
 
+      const names = new Map();
+      archive.periods.forEach((period) => names.set(period.name, (names.get(period.name) || 0) + 1));
       const select = $('#archive-period');
       select.replaceChildren();
-      const seen = new Set();
-      for (const day of [...archive.days].reverse()) {
-        const key = day.periodId || '';
-        if (seen.has(key)) continue;
-        seen.add(key);
+      for (const period of archive.periods) {
         const option = document.createElement('option');
-        option.value = key;
-        option.textContent = archivePeriodLabel(archive.periods.get(key));
+        option.value = period.id;
+        const count = Number(period.sessionCount || 0);
+        const label = names.get(period.name) > 1 ? `${period.name} (${archivePeriodRange(period)})` : period.name;
+        option.textContent = `${label} — ${count} session${count === 1 ? '' : 's'} · ${studyHours(period.totalSeconds)}${period.current ? ' · in progress' : ''}`;
         select.append(option);
       }
-      select.disabled = !archive.days.length;
+      select.disabled = !archive.periods.length;
 
-      const empty = !archive.days.length;
+      const empty = !archive.days.size;
       $('#archive-empty').classList.toggle('hub-hidden', !empty);
-      $('#archive-day').classList.toggle('hub-hidden', empty);
-      if (empty) {
-        archive.index = -1;
-        $('#archive-prev').disabled = true;
-        $('#archive-next').disabled = true;
-        $('#archive-position').textContent = 'No archived days';
-        return;
-      }
+      $('#archive-month').classList.toggle('hub-hidden', !archive.periods.length);
+      $('#archive-days').classList.toggle('hub-hidden', !archive.periods.length);
+      $('#archive-day').classList.toggle('hub-hidden', !archive.periods.length);
+
       const wanted = new URLSearchParams(location.search).get('day');
-      const index = archive.days.findIndex((day) => day.day === wanted);
-      await showArchiveDay(index >= 0 ? index : archive.days.length - 1);
+      const latest = [...archive.days.keys()].filter((day) => day <= archive.today).at(-1);
+      const initial = wanted && /^\d{4}-\d{2}-\d{2}$/.test(wanted) ? wanted : latest || archive.today;
+      await showArchiveDay(initial);
     } catch (error) {
       if (error.status === 401 || error.status === 403) return adminSignedOut();
       showAdminStatus(error.message || 'Could not load the archive.');
     }
   }
 
-  async function showArchiveDay(index) {
+  function renderArchiveMonth(period) {
     const archive = state.archive;
-    const day = archive.days[index];
-    if (!day) return;
-    archive.index = index;
-    const date = archiveDayDate(day.day);
-    $('#archive-weekday').textContent = new Intl.DateTimeFormat('en-GB', { weekday: 'long', timeZone: 'UTC' }).format(date);
+    archive.periodId = period.id;
+    $('#archive-period').value = period.id;
+    $('#archive-month-kicker').textContent = period.current ? 'Current month · in progress' : 'Closed month';
+    $('#archive-month-name').textContent = period.name;
+    $('#archive-month-range').textContent = period.current
+      ? `${archiveRangeFormat.format(dayDate(period.startDay))} – today`
+      : `Counter period: ${archivePeriodRange(period)}`;
+    $('#archive-month-sessions').textContent = String(period.sessionCount || 0);
+    $('#archive-month-hours').textContent = studyHours(period.totalSeconds);
+
+    const container = $('#archive-days');
+    container.replaceChildren();
+    const weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone: 'UTC' });
+    const monthShort = new Intl.DateTimeFormat('en-GB', { month: 'short', timeZone: 'UTC' });
+    for (let day = period.startDay; day <= period.endDay; day = addDays(day, 1)) {
+      const stats = archive.days.get(day);
+      const date = dayDate(day);
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'hub-archive-day-chip';
+      chip.dataset.archiveDay = day;
+      if (!stats) chip.classList.add('hub-archive-day-chip--empty');
+      if (day === archive.today) chip.classList.add('hub-archive-day-chip--today');
+      const top = document.createElement('span');
+      top.className = 'hub-archive-day-chip__weekday';
+      top.textContent = weekday.format(date);
+      const middle = document.createElement('span');
+      middle.className = 'hub-archive-day-chip__date';
+      const dayNumber = Number(day.slice(8));
+      middle.textContent = day === period.startDay || dayNumber === 1 ? `${dayNumber} ${monthShort.format(date)}` : String(dayNumber);
+      const bottom = document.createElement('span');
+      bottom.className = 'hub-archive-day-chip__stats';
+      bottom.textContent = stats ? `${stats.sessionCount} · ${studyHours(stats.totalSeconds).replace(' min', 'm').replace(' h ', 'h ')}` : '—';
+      chip.append(top, middle, bottom);
+      chip.setAttribute('aria-label', `${new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(date)}: ${stats ? `${stats.sessionCount} session${stats.sessionCount === 1 ? '' : 's'}, ${studyHours(stats.totalSeconds)}` : 'no activity'}`);
+      container.append(chip);
+    }
+  }
+
+  async function showArchiveDay(requestedDay) {
+    const archive = state.archive;
+    if (!archive.loaded || !archive.periods.length) return;
+    const day = requestedDay < archive.firstDay ? archive.firstDay : requestedDay > archive.today ? archive.today : requestedDay;
+    archive.day = day;
+    const period = archivePeriodFor(day);
+    if (period.id !== archive.periodId || !$('#archive-days').children.length) renderArchiveMonth(period);
+    $$('[data-archive-day]', $('#archive-days')).forEach((chip) => {
+      if (chip.dataset.archiveDay === day) chip.setAttribute('aria-current', 'date');
+      else chip.removeAttribute('aria-current');
+    });
+
+    const stats = archive.days.get(day) || { sessionCount: 0, studentCount: 0, totalSeconds: 0 };
+    const date = dayDate(day);
+    $('#archive-weekday').textContent = day === archive.today
+      ? 'Today'
+      : new Intl.DateTimeFormat('en-GB', { weekday: 'long', timeZone: 'UTC' }).format(date);
     $('#archive-date').textContent = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date);
-    $('#archive-period-label').textContent = `Archive period: ${archivePeriodLabel(archive.periods.get(day.periodId || ''))}`;
-    $('#archive-session-count').textContent = String(day.sessionCount);
-    $('#archive-student-count').textContent = String(day.studentCount);
-    $('#archive-total-time').textContent = hms(day.totalSeconds);
-    $('#archive-prev').disabled = index === 0;
-    $('#archive-next').disabled = index === archive.days.length - 1;
-    $('#archive-position').textContent = `Day ${index + 1} of ${archive.days.length}`;
-    $('#archive-period').value = day.periodId || '';
-    if (location.pathname === '/admin/archive') history.replaceState({}, '', `/admin/archive?day=${day.day}`);
+    $('#archive-period-label').textContent = `${period.name}${period.current ? ' · current month' : ''}`;
+    $('#archive-session-count').textContent = String(stats.sessionCount);
+    $('#archive-student-count').textContent = String(stats.studentCount);
+    $('#archive-total-time').textContent = hms(stats.totalSeconds);
+    $('#archive-prev').disabled = day <= archive.firstDay;
+    $('#archive-next').disabled = day >= archive.today;
+    const dayIndex = Math.round((date.getTime() - dayDate(period.startDay).getTime()) / 86400000) + 1;
+    const dayTotal = Math.round((dayDate(period.endDay).getTime() - dayDate(period.startDay).getTime()) / 86400000) + 1;
+    $('#archive-position').textContent = archivePeriodContains(period, day) ? `Day ${dayIndex} of ${dayTotal}` : period.name;
+    if (location.pathname === '/admin/archive') history.replaceState({}, '', `/admin/archive?day=${day}`);
 
     const container = $('#archive-sessions');
-    emptyMessage(container, 'Loading activity…');
     const requestId = ++archive.requestId;
+    if (!archive.days.has(day)) return emptyMessage(container, 'No study sessions on this day.');
+    emptyMessage(container, 'Loading activity…');
     try {
-      const result = await api(`/api/admin/archive/days/${encodeURIComponent(day.day)}`);
+      const result = await api(`/api/admin/archive/days/${encodeURIComponent(day)}`);
       if (requestId !== archive.requestId) return;
       const sessions = result.sessions || [];
-      if (!sessions.length) return emptyMessage(container, 'No activity recorded on this day.');
+      if (!sessions.length) return emptyMessage(container, 'No study sessions on this day.');
       const time = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: archive.timeZone });
       const dayKey = new Intl.DateTimeFormat('en-CA', { timeZone: archive.timeZone });
       const otherDay = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: archive.timeZone });
-      const tableElement = table(['Student', 'Started', 'Ended', 'Duration']);
+      const tableElement = table(['Student', 'Started', 'Ended', 'Study time']);
       const body = $('tbody', tableElement);
       for (const session of sessions) {
         const row = document.createElement('tr');
@@ -1346,8 +1444,15 @@
         identity.append(name, email);
         cell(row, time.format(new Date(session.startedAt)));
         const ended = session.endedAt ? new Date(session.endedAt) : null;
-        cell(row, !ended ? '—' : dayKey.format(ended) === day.day ? time.format(ended) : otherDay.format(ended));
-        cell(row, hms(session.durationSeconds));
+        const endedCell = cell(row, '');
+        if (session.status === 'active') {
+          const badge = document.createElement('span');
+          badge.className = 'hub-badge';
+          badge.textContent = 'Active';
+          endedCell.append(badge);
+        } else endedCell.textContent = !ended ? '—' : dayKey.format(ended) === day ? time.format(ended) : otherDay.format(ended);
+        const duration = cell(row, hms(session.durationSeconds));
+        if (session.status === 'active') duration.dataset.adminSessionStarted = session.timerStartedAt || session.startedAt || '';
         body.append(row);
       }
       container.replaceChildren(tableElement);
@@ -1358,12 +1463,17 @@
     }
   }
 
-  $('#archive-prev').addEventListener('click', () => { void showArchiveDay(state.archive.index - 1); });
-  $('#archive-next').addEventListener('click', () => { void showArchiveDay(state.archive.index + 1); });
+  $('#archive-prev').addEventListener('click', () => { void showArchiveDay(addDays(state.archive.day, -1)); });
+  $('#archive-next').addEventListener('click', () => { void showArchiveDay(addDays(state.archive.day, 1)); });
+  $('#archive-days').addEventListener('click', (event) => {
+    const chip = event.target.closest('[data-archive-day]');
+    if (chip) void showArchiveDay(chip.dataset.archiveDay);
+  });
   $('#archive-period').addEventListener('change', () => {
-    const value = $('#archive-period').value;
-    const index = state.archive.days.findIndex((day) => (day.periodId || '') === value);
-    if (index >= 0) void showArchiveDay(index);
+    const period = state.archive.periods.find((item) => item.id === $('#archive-period').value);
+    if (!period) return;
+    renderArchiveMonth(period);
+    void showArchiveDay(archiveLatestDay(period));
   });
 
   // ---- Edit or delete a student account (owner only) ----
