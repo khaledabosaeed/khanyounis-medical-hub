@@ -12,10 +12,10 @@ const { STUDENT_SESSION_SECONDS } = await import('../server/auth/student.js');
 const passThrough = (_req, _res, next) => next();
 const PASSWORD = 'Student-Pass-1';
 
-async function makePool({ activeSessionId = null } = {}) {
+async function makePool({ activeSessionId = null, sessions = [] } = {}) {
   const state = {
     passwordHash: await security.hashPassword(PASSWORD),
-    sessions: activeSessionId ? [{ id: activeSessionId, status: 'active' }] : [],
+    sessions: activeSessionId ? [{ id: activeSessionId, status: 'active' }] : structuredClone(sessions),
     auth: new Map(), calls: [], txCalls: [], nextSessionId: 500, needsRenewal: false,
   };
   const connection = {
@@ -25,8 +25,21 @@ async function makePool({ activeSessionId = null } = {}) {
       state.txCalls.push({ sql: normalized, params });
       if (normalized.startsWith('SELECT id FROM students WHERE id = ? FOR UPDATE')) return [[{ id: params[0] }], []];
       if (normalized.startsWith('SELECT id FROM study_sessions')) {
-        const active = state.sessions.filter((session) => session.status === 'active').at(-1);
-        return [active ? [{ id: active.id }] : [], []];
+        if (normalized.includes("status = 'active'")) {
+          const active = state.sessions.filter((session) => session.status === 'active').at(-1);
+          return [active ? [{ id: active.id }] : [], []];
+        }
+        // Today's (hub time zone) completed session that is not archived yet.
+        assert.match(normalized, /status = 'completed' AND archived_at IS NULL/);
+        assert.match(normalized, /\(started_at AT TIME ZONE \?\)::date = \(CURRENT_TIMESTAMP AT TIME ZONE \?\)::date/);
+        assert.equal(params[1], 'Asia/Gaza');
+        const today = state.sessions.filter((session) => session.status === 'completed' && session.today && !session.archived).at(-1);
+        return [today ? [{ id: today.id }] : [], []];
+      }
+      if (normalized.startsWith("UPDATE study_sessions SET status = 'active', ended_at = NULL, segment_started_at = UTC_TIMESTAMP(3)")) {
+        const session = state.sessions.find((item) => item.id === String(params[0]) && item.status === 'completed' && !item.archived);
+        if (session) session.status = 'active';
+        return [{ affectedRows: session ? 1 : 0 }, []];
       }
       if (normalized.startsWith('INSERT INTO study_sessions')) {
         const id = String(state.nextSessionId++);
@@ -112,6 +125,30 @@ test('logging in with no active study session starts exactly one new session', a
   assert.equal(second.resumedSession, true);
   assert.equal(second.studySession.id, '500');
   assert.equal(pool.state.sessions.length, 1);
+});
+
+test('signing in again on the same day reopens that day\'s session instead of starting another one', async (t) => {
+  const pool = await makePool({ sessions: [{ id: '77', status: 'completed', today: true }] });
+  const origin = await startApp(pool, t);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const body = await (await login(origin)).json();
+    assert.equal(body.studySession.id, '77');
+    assert.equal(body.resumedSession, true);
+    pool.state.sessions[0].status = 'completed'; // signed out again
+  }
+  assert.equal(pool.state.sessions.length, 1, 'ten sign-ins in a day are still one session');
+  assert.ok(!pool.state.txCalls.some((call) => call.sql.startsWith('INSERT INTO study_sessions')));
+});
+
+test('a session from an earlier day, or one already archived, is not reopened', async (t) => {
+  for (const old of [{ id: '60', status: 'completed', today: false }, { id: '61', status: 'completed', today: true, archived: true }]) {
+    const pool = await makePool({ sessions: [old] });
+    const origin = await startApp(pool, t);
+    const body = await (await login(origin)).json();
+    assert.equal(body.resumedSession, false);
+    assert.equal(body.studySession.id, '500');
+    assert.equal(pool.state.sessions.find((session) => session.id === old.id).status, 'completed');
+  }
 });
 
 test('student sign-ins use a persistent long-lived cookie that is renewed while in use', async (t) => {

@@ -15,8 +15,20 @@ const fixtures = [
   { id: '4', status: 'active', start: now - 1800000, end: null, duration: 0 },
 ];
 
+// Study time of a session up to `at`: finished stretches plus the running one.
+function liveSeconds(session, at) {
+  if (session.status !== 'active') return session.duration;
+  return session.duration + Math.max(0, Math.floor((at - (session.segment ?? session.start)) / 1000));
+}
+
+function periodSeconds(state) {
+  return state.sessions.filter(s => !s.archivedAt)
+    .reduce((sum, s) => sum + Math.max(0, liveSeconds(s, state.now) - (s.prev || 0)), 0);
+}
+
 function makePool() {
-  const state = { now, resetAt: null, version: 0, owner: null, calls: [], events: [], failRead: false, sessions: structuredClone(fixtures), archive: [] };
+  const state = { now, resetAt: null, version: 0, owner: null, calls: [], events: [], failRead: false,
+    sessions: structuredClone(fixtures).map(s => ({ ...s, duration: s.status === 'active' ? 0 : s.duration, prev: 0 })), archive: [] };
   const activeCount = () => state.sessions.filter(s => s.status === 'active').length;
   let snapshot;
   const connection = {
@@ -31,9 +43,16 @@ function makePool() {
       if (normalized.startsWith('SELECT reset_at AS resetAt, reset_version AS counterVersion, CURRENT_TIMESTAMP(3) AS resetNow')) {
         return [[{ resetAt: state.resetAt === null ? null : new Date(state.resetAt), counterVersion: state.version, resetNow: new Date(state.now) }], []];
       }
-      if (normalized.startsWith('SELECT COALESCE(SUM(session.status')) {
+      if (normalized.startsWith("SELECT COALESCE(SUM(CASE WHEN session.status = 'completed'")) {
+        assert.match(normalized, /WHERE session.archived_at IS NULL/);
+        assert.match(normalized, /- session.previous_period_seconds/);
         const completed = state.sessions.filter(s => s.status === 'completed' && !s.archivedAt);
-        return [[{ completedCount: completed.length, totalSeconds: completed.reduce((sum, s) => sum + s.duration, 0) }], []];
+        return [[{ completedCount: completed.length, totalSeconds: periodSeconds(state) }], []];
+      }
+      if (normalized.startsWith('UPDATE study_sessions AS session SET previous_period_seconds')) {
+        assert.match(normalized, /WHERE session.status = 'active' AND session.archived_at IS NULL/);
+        state.sessions.filter(s => s.status === 'active' && !s.archivedAt).forEach(s => { s.prev = liveSeconds(s, state.now); });
+        return [{ affectedRows: activeCount() }, []];
       }
       if (normalized.startsWith('INSERT INTO admin_study_counter_archive')) {
         state.archive.push({ id: String(state.archive.length + 1), periodStartedAt: params[0], periodEndedAt: params[1], completed: params[2], seconds: params[3] });
@@ -70,15 +89,11 @@ function makePool() {
       if (sql.includes('FROM students')) return [[{ studentCount: 3 }], []];
       if (sql.includes('FROM messages')) return [[{ messageCount: 2 }], []];
       assert.match(sql, /FROM admin_study_counter AS counter/);
-      assert.match(sql, /GREATEST\(session.started_at, counter.reset_at\)/);
-      assert.match(sql, /LEAST\(COALESCE\(session.ended_at, UTC_TIMESTAMP\(3\)\), UTC_TIMESTAMP\(3\)\)/);
-      const totalSeconds = state.sessions.reduce((sum, session) => {
-        if (state.resetAt === null && session.status === 'completed') return sum + session.duration;
-        const start = Math.max(session.start, state.resetAt ?? session.start);
-        const end = Math.min(session.end ?? state.now, state.now);
-        return sum + Math.max(0, Math.floor((end - start) / 1000));
-      }, 0);
-      return [[{ activeCount: activeCount(), completedCount: state.sessions.length - activeCount(), totalSeconds,
+      assert.match(sql, /LEFT JOIN study_sessions AS session ON session.archived_at IS NULL/);
+      assert.match(sql, /COALESCE\(session.segment_started_at, session.started_at\)/);
+      assert.match(sql, /- session.previous_period_seconds/);
+      const live = state.sessions.filter(s => !s.archivedAt);
+      return [[{ activeCount: activeCount(), completedCount: live.filter(s => s.status === 'completed').length, totalSeconds: periodSeconds(state),
         resetAt: state.resetAt === null ? null : new Date(state.resetAt), counterVersion: state.version }], []];
     },
   };
@@ -98,10 +113,11 @@ test('counter reset zeros the administrative total and moves completed sessions 
   assert.equal(reset.archivedSessionCount, 2);
   assert.equal(pool.state.archive.length, 1);
   assert.equal(pool.state.archive[0].completed, 2);
-  assert.equal(pool.state.archive[0].seconds, 3600 + 7200);
+  assert.equal(pool.state.archive[0].seconds, before.totalSeconds, 'the closed period keeps exactly what the counter showed');
+  assert.equal(reset.archivedSessionSeconds, before.totalSeconds);
   for (const session of pool.state.sessions) {
     const original = originalSessions.find(item => item.id === session.id);
-    assert.equal(session.duration, original.duration, 'durations never change');
+    assert.equal(session.duration, original.status === 'active' ? 0 : original.duration, 'durations never change');
     assert.equal(session.status, original.status, 'active sessions keep running');
     assert.equal(Boolean(session.archivedAt), session.status === 'completed', 'only completed sessions are archived');
     if (session.archivedAt) assert.equal(session.periodId, '1');
@@ -114,7 +130,7 @@ test('counter reset zeros the administrative total and moves completed sessions 
   const later = await getStudyCounterOverview(pool);
   assert.equal(later.totalSeconds, 30 * before.activeSessionCount);
   assert.equal(later.activeSessionCount, before.activeSessionCount);
-  assert.equal(later.completedSessionCount, before.completedSessionCount);
+  assert.equal(later.completedSessionCount, 0, 'completed sessions moved to the archive leave the counter');
   await resetStudyCounter(pool, '8');
   assert.equal((await getStudyCounterOverview(pool)).totalSeconds, 0);
   assert.equal(pool.state.version, 2);
@@ -124,6 +140,11 @@ test('sessions crossing the period boundary include only their time after the re
   const pool = makePool();
   pool.state.resetAt = Date.parse('2026-10-19T10:00:00.000Z');
   pool.state.version = 1;
+  // State after a reset at 10:00: session 1 ended before it and was archived;
+  // sessions 2 and 3 were running and had 1 hour counted by the old period.
+  pool.state.sessions[0].archivedAt = pool.state.resetAt;
+  pool.state.sessions[1].prev = 3600;
+  pool.state.sessions[2].prev = 3600;
   const overview = await getStudyCounterOverview(pool);
   const expected = [3600, 7200, 1800].reduce((sum, seconds) => sum + seconds, 0);
   assert.equal(overview.totalSeconds, expected);

@@ -346,8 +346,20 @@
                     <div><p class="hub-admin-kicker">Archive</p><h2>Daily activity archive</h2></div>
                     <label class="hub-archive-period" for="archive-period"><span>Month</span><select id="archive-period" class="hub-select"></select></label>
                   </div>
-                  <p class="hub-muted hub-archive-intro">Each counter reset moves the completed sessions here. Browse one day at a time.</p>
-                  <div id="archive-empty" class="hub-conversation-empty hub-hidden">Nothing is archived yet. When you reset the counter, completed sessions move to this archive.</div>
+                  <p class="hub-muted hub-archive-intro">Every study day is kept here. Pick a month, then a day, to see who studied and for how long.</p>
+                  <div id="archive-empty" class="hub-conversation-empty hub-hidden">No study sessions have been recorded yet.</div>
+                  <div id="archive-month" class="hub-archive-month hub-hidden">
+                    <div class="hub-archive-month__title">
+                      <p id="archive-month-kicker" class="hub-archive-weekday"></p>
+                      <h3 id="archive-month-name"></h3>
+                      <p id="archive-month-range" class="hub-muted"></p>
+                    </div>
+                    <div class="hub-archive-stats">
+                      <div><span>Sessions this month</span><strong id="archive-month-sessions">0</strong></div>
+                      <div><span>Study hours</span><strong id="archive-month-hours">0 h 00 min</strong></div>
+                    </div>
+                  </div>
+                  <div id="archive-days" class="hub-archive-days hub-hidden" aria-label="Days in this month"></div>
                   <div id="archive-day" class="hub-archive-day hub-hidden">
                     <div class="hub-archive-day__head">
                       <div class="hub-archive-day__title">

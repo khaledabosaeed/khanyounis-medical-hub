@@ -13,6 +13,7 @@ import {
 } from '../security.js';
 import { inTransaction } from '../db/transaction.js';
 import { getStudyCounterOverview, listStudyCounterArchive, resetStudyCounter } from '../admin-counter.js';
+import { HUB_TIME_ZONE, hubDay, sessionSecondsSql, timerStartedAt } from '../time.js';
 
 const ADMIN_SESSION_MS = 8 * 60 * 60 * 1000;
 const ADMIN_MAX_LOGIN_ATTEMPTS = 5;
@@ -20,12 +21,6 @@ const SUB_ADMIN_MIN_PASSWORD_LENGTH = 12;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phonePattern = /^\+?[0-9 ()-]{7,32}$/;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-
-// Archive days are calendar days in the hub's own time zone (Khan Younis).
-const HUB_TIME_ZONE = (() => {
-  const zone = process.env.HUB_TIME_ZONE || 'Asia/Gaza';
-  try { new Intl.DateTimeFormat('en', { timeZone: zone }); return zone; } catch { return 'UTC'; }
-})();
 let dummyPasswordHashPromise;
 
 function validId(value) {
@@ -38,6 +33,15 @@ function adminProfile(admin) {
     email: admin.email,
     fullName: admin.fullName,
     role: admin.role,
+  };
+}
+
+function publicSessionRow(row) {
+  const { storedSeconds, segmentStartedAt, ...session } = row;
+  return {
+    ...session, id: String(row.id), studentId: String(row.studentId),
+    durationSeconds: Number(row.durationSeconds || 0),
+    timerStartedAt: timerStartedAt({ status: row.status, startedAt: row.startedAt, segmentStartedAt, durationSeconds: storedSeconds }),
   };
 }
 
@@ -171,9 +175,7 @@ export function createAdminRouter({ pool, requirePublicCsrf, requireSessionCsrf 
         SELECT student.id, student.full_name AS fullName, student.email, student.phone,
                DATE_FORMAT(student.created_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS createdAt,
                COUNT(DISTINCT session.id) AS sessionCount,
-               COALESCE(SUM(CASE WHEN session.status = 'completed' THEN session.duration_seconds
-                                 WHEN session.status = 'active' THEN TIMESTAMPDIFF(SECOND, session.started_at, UTC_TIMESTAMP(3))
-                                 ELSE 0 END), 0) AS totalSeconds
+               COALESCE(SUM(CASE WHEN session.id IS NULL THEN 0 ELSE ${sessionSecondsSql()} END), 0) AS totalSeconds
         FROM students AS student
         LEFT JOIN study_sessions AS session ON session.student_id = student.id AND session.archived_at IS NULL
         WHERE (? = '' OR student.full_name LIKE ? OR student.email_normalized LIKE ? OR student.phone LIKE ?)
@@ -199,9 +201,9 @@ export function createAdminRouter({ pool, requirePublicCsrf, requireSessionCsrf 
                student.full_name AS studentName, student.email, student.phone,
                DATE_FORMAT(session.started_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS startedAt,
                DATE_FORMAT(session.ended_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS endedAt,
-               session.status,
-               CASE WHEN session.status = 'active' THEN TIMESTAMPDIFF(SECOND, session.started_at, UTC_TIMESTAMP(3))
-                    ELSE session.duration_seconds END AS durationSeconds
+               DATE_FORMAT(session.segment_started_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS segmentStartedAt,
+               session.status, session.duration_seconds AS storedSeconds,
+               ${sessionSecondsSql()} AS durationSeconds
         FROM study_sessions AS session
         JOIN students AS student ON student.id = session.student_id
         WHERE (? = 'all' OR session.status = ?)
@@ -210,9 +212,7 @@ export function createAdminRouter({ pool, requirePublicCsrf, requireSessionCsrf 
         ORDER BY (session.status = 'active') DESC, session.started_at DESC
         LIMIT 1000
       `, [status, status, studentId, studentId]);
-      return res.json({ sessions: rows.map((row) => ({
-        ...row, id: String(row.id), studentId: String(row.studentId), durationSeconds: Number(row.durationSeconds || 0),
-      })) });
+      return res.json({ sessions: rows.map(publicSessionRow) });
     } catch (error) { return next(error); }
   });
 
@@ -223,7 +223,7 @@ export function createAdminRouter({ pool, requirePublicCsrf, requireSessionCsrf 
         const [result] = await connection.execute(`
           UPDATE study_sessions
           SET ended_at = UTC_TIMESTAMP(3),
-              duration_seconds = GREATEST(0, TIMESTAMPDIFF(SECOND, started_at, UTC_TIMESTAMP(3))),
+              duration_seconds = ${sessionSecondsSql('')},
               status = 'completed'
           WHERE id = ? AND status = 'active'
         `, [req.params.id]);
@@ -290,30 +290,44 @@ export function createAdminRouter({ pool, requirePublicCsrf, requireSessionCsrf 
   });
 
   // ---- Daily activity archive (read-only; sub-admins may view it) ----
+  // Every study day, archived or not, grouped by calendar day in the hub's
+  // time zone, plus the counter periods ("months") with their totals.
   router.get('/archive/days', requireAdminAuth, async (_req, res, next) => {
     try {
       const [rows] = await pool.execute(`
         SELECT to_char(session.started_at AT TIME ZONE ?, 'YYYY-MM-DD') AS day,
-               MAX(session.archive_period_id) AS periodId,
                COUNT(*) AS sessionCount,
                COUNT(DISTINCT session.student_id) AS studentCount,
-               COALESCE(SUM(session.duration_seconds), 0) AS totalSeconds
+               COALESCE(SUM(${sessionSecondsSql()}), 0) AS totalSeconds
         FROM study_sessions AS session
-        WHERE session.archived_at IS NOT NULL
         GROUP BY 1
         ORDER BY 1 ASC
         LIMIT 5000
       `, [HUB_TIME_ZONE]);
-      return res.json({
-        timeZone: HUB_TIME_ZONE,
-        days: rows.map((row) => ({
-          day: row.day,
-          periodId: row.periodId == null ? null : String(row.periodId),
-          sessionCount: Number(row.sessionCount || 0),
-          studentCount: Number(row.studentCount || 0),
-          totalSeconds: Number(row.totalSeconds || 0),
-        })),
-      });
+      const [archived, counter] = await Promise.all([listStudyCounterArchive(pool), getStudyCounterOverview(pool)]);
+      const days = rows.map((row) => ({
+        day: row.day,
+        sessionCount: Number(row.sessionCount || 0),
+        studentCount: Number(row.studentCount || 0),
+        totalSeconds: Number(row.totalSeconds || 0),
+      }));
+      const today = hubDay(new Date());
+      const firstDay = days[0]?.day || today;
+      const current = {
+        id: 'current', current: true,
+        periodStartedAt: counter.counterResetAt, periodEndedAt: null,
+        startDay: counter.counterResetAt ? hubDay(counter.counterResetAt) : firstDay,
+        endDay: today,
+        sessionCount: counter.completedSessionCount + counter.activeSessionCount,
+        totalSeconds: counter.totalSeconds,
+      };
+      const periods = [current, ...archived.map((period) => ({ ...period, current: false }))];
+      // The first period has no start: it begins with the first study day.
+      for (const period of periods) {
+        if (!period.startDay) period.startDay = period.firstDay || firstDay;
+        if (period.startDay > period.endDay) period.startDay = period.endDay;
+      }
+      return res.json({ timeZone: HUB_TIME_ZONE, today, firstDay: firstDay < today ? firstDay : today, days, periods });
     } catch (error) { return next(error); }
   });
 
@@ -328,20 +342,16 @@ export function createAdminRouter({ pool, requirePublicCsrf, requireSessionCsrf 
                student.full_name AS studentName, student.email,
                DATE_FORMAT(session.started_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS startedAt,
                DATE_FORMAT(session.ended_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS endedAt,
-               session.duration_seconds AS durationSeconds
+               DATE_FORMAT(session.segment_started_at, '%Y-%m-%dT%H:%i:%s.%fZ') AS segmentStartedAt,
+               session.status, session.duration_seconds AS storedSeconds,
+               ${sessionSecondsSql()} AS durationSeconds
         FROM study_sessions AS session
         JOIN students AS student ON student.id = session.student_id
-        WHERE session.archived_at IS NOT NULL
-          AND to_char(session.started_at AT TIME ZONE ?, 'YYYY-MM-DD') = ?
+        WHERE to_char(session.started_at AT TIME ZONE ?, 'YYYY-MM-DD') = ?
         ORDER BY session.started_at ASC
         LIMIT 2000
       `, [HUB_TIME_ZONE, day]);
-      return res.json({
-        day, timeZone: HUB_TIME_ZONE,
-        sessions: rows.map((row) => ({
-          ...row, id: String(row.id), studentId: String(row.studentId), durationSeconds: Number(row.durationSeconds || 0),
-        })),
-      });
+      return res.json({ day, timeZone: HUB_TIME_ZONE, sessions: rows.map(publicSessionRow) });
     } catch (error) { return next(error); }
   });
 

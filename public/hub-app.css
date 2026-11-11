@@ -487,6 +487,23 @@
 .hub-archive-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; border-top: 1px solid #edf2f7; padding-top: 14px; }
 .hub-archive-position { color: #475569; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .hub-archive-nav .hub-button:disabled { opacity: .45; cursor: not-allowed; }
+.hub-archive-month { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-top: 12px; border: 1px solid #ccebe6; border-radius: 10px; background: #f0fdfa; padding: 14px 16px; }
+.hub-archive-month__title h3 { margin: 4px 0 2px; color: #020617; font-size: 20px; font-weight: 900; letter-spacing: -.01em; }
+.hub-archive-month__title .hub-muted { margin: 0; font-size: 12px; }
+.hub-archive-month .hub-archive-stats > div { border-color: #ccebe6; }
+.hub-archive-days { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; margin-top: 12px; }
+.hub-archive-day-chip { display: grid; gap: 1px; min-width: 0; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; padding: 7px 8px; color: #0f172a; font: inherit; text-align: left; cursor: pointer; }
+.hub-archive-day-chip:hover { border-color: #94a3b8; }
+.hub-archive-day-chip:focus-visible { outline: 3px solid rgba(15,118,110,.25); outline-offset: 2px; }
+.hub-archive-day-chip__weekday { color: #64748b; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.hub-archive-day-chip__date { font-size: 16px; font-weight: 900; font-variant-numeric: tabular-nums; }
+.hub-archive-day-chip__stats { overflow: hidden; color: #0f766e; font-size: 10px; font-weight: 800; white-space: nowrap; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.hub-archive-day-chip--empty { background: #f8fafc; color: #94a3b8; }
+.hub-archive-day-chip--empty .hub-archive-day-chip__stats { color: #94a3b8; }
+.hub-archive-day-chip--today { border-style: dashed; border-color: #0f766e; }
+.hub-archive-day-chip[aria-current="date"] { border-color: #0f766e; background: #0f766e; color: #fff; }
+.hub-archive-day-chip[aria-current="date"] .hub-archive-day-chip__weekday,
+.hub-archive-day-chip[aria-current="date"] .hub-archive-day-chip__stats { color: #ccfbf1; }
 
 /* Edit buttons next to each student. */
 .hub-student-item { display: flex; min-width: 0; align-items: center; gap: 6px; }
@@ -515,6 +532,7 @@
   .hub-archive-period { width: 100%; }
   .hub-archive-period .hub-select { flex: 1; min-width: 0; }
   .hub-archive-nav .hub-button { padding: 10px 11px; }
+  .hub-archive-days { grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); }
   .hub-active-session__actions { justify-content: stretch; }
   .hub-active-session__actions .hub-button { flex: 1; }
   .hub-dialog__actions .hub-button { flex: 1; }
